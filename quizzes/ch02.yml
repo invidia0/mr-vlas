@@ -1,0 +1,192 @@
+title: "Chapter 2 — Check your understanding"
+questions:
+  - q: |
+      In cross-attention, queries come from $X\in\mathbb{R}^{T\times d}$ (action queries, $T=10$) and keys/values from $C\in\mathbb{R}^{S\times d}$ (image patches, $S=256$). With $h=8$ heads, batch $B=4$, what is the shape of the attention-weight tensor, and over which dimension does each softmax normalise?
+    type: single
+    options:
+      - text: "`(4, 8, 10, 256)`; softmax over the last dimension (the 256 keys)."
+        correct: true
+        why: "One row per query per head; each row is a distribution over the keys."
+      - text: "`(4, 8, 256, 10)`; softmax over the last dimension."
+        why: "That would make the patches the queries."
+      - text: "`(4, 8, 10, 256)`; softmax over the queries (dimension 2)."
+        why: "Normalising over queries would make each *key* distribute its attention, which is not attention."
+      - text: "`(4, 10, 256)`; heads are summed before the softmax."
+        why: "Each head has its own attention weights."
+    explain: "Attention weights have shape `(B, h, T, S)`; rows (fixed query) sum to 1 over the keys."
+
+  - q: "Query and key entries are i.i.d. with mean 0 and variance 1, and $d_k=256$. Without scaling, what is the standard deviation of a score $\\mathbf{q}\\mathbf{k}^\\top$, and what is the consequence?"
+    type: single
+    options:
+      - text: "1; no consequence."
+        why: "The variance of a sum of $d_k$ independent unit-variance products is $d_k$."
+      - text: "16; softmax rows become nearly one-hot and gradients through the softmax nearly vanish."
+        correct: true
+        why: "$\\sqrt{256}=16$. Saturated softmax has a near-zero Jacobian."
+      - text: "256; the softmax overflows to infinity."
+        why: "The *variance* is 256; the standard deviation is 16. Implementations subtract the max, so no overflow."
+      - text: "16; attention becomes uniform over keys."
+        why: "Large score spread makes the softmax *peaked*, not uniform."
+    explain: "Dividing by $\\sqrt{d_k}$ restores unit variance, keeping the softmax in its sensitive regime at initialisation."
+
+  - q: "A decoder-only model is trained with a causal mask. Which statements are true?"
+    type: multi
+    options:
+      - text: "The output at position $t$ depends only on tokens $1..t$."
+        correct: true
+        why: "Masked scores $j>t$ get weight 0 in every layer, so no information flows backward in position."
+      - text: "One forward pass yields the training predictions for every position of the sequence."
+        correct: true
+        why: "That is teacher forcing, and it is why transformers train in parallel."
+      - text: "At inference, keys and values of past positions must be recomputed every step because later tokens change them."
+        why: "With a causal mask they never change, which is exactly what makes the KV cache valid."
+      - text: "Changing the last input token can change the logits at earlier positions."
+        why: "Earlier positions cannot see the last token. (The tests in `tests/test_transformer.py` check this.)"
+    explain: "Causality makes parallel training and KV caching possible. A test that perturbs a late token and checks that earlier outputs are unchanged is the standard way to catch masking bugs."
+
+  - q: "Which statement about permutation and positional encodings is correct?"
+    type: single
+    options:
+      - text: "Self-attention without a mask is permutation-equivariant, so order information must come from positional encodings (or a mask)."
+        correct: true
+        why: "$\\operatorname{Attn}(PX)=P\\operatorname{Attn}(X)$; the FFN acts per token, so the whole stack is equivariant."
+      - text: "Self-attention is permutation-invariant: permuting the input leaves every output vector in place."
+        why: "Equivariant, not invariant: the outputs are permuted along with the inputs."
+      - text: "The softmax breaks permutation symmetry."
+        why: "Row-wise softmax commutes with consistent row/column permutations."
+      - text: "The FFN encodes position because it has different weights per position."
+        why: "The FFN uses the same weights at every position."
+    explain: "For multi-robot policies, this equivariance is a *feature*: without positional encodings, a model treats a team as a set."
+
+  - q: "RoPE rotates query and key pairs by angles $m\\theta_i$ and $n\\theta_i$. Why does the attention score depend only on $m-n$?"
+    type: single
+    options:
+      - text: "Because $R_mR_n^\\top=R_{m-n}$ for 2-D rotations, so $\\mathbf{q}R_m(\\mathbf{k}R_n)^\\top=\\mathbf{q}R_{m-n}\\mathbf{k}^\\top$."
+        correct: true
+        why: "Rotations by angles compose additively and $R_n^\\top=R_{-n}$."
+      - text: "Because RoPE subtracts the key's position embedding from the query's."
+        why: "RoPE is multiplicative (rotations), not subtractive."
+      - text: "Because the values are rotated in the opposite direction."
+        why: "Values are not rotated in RoPE."
+      - text: "Because the frequencies $\\theta_i$ are learned to cancel absolute positions."
+        why: "The frequencies are fixed, not learned."
+    explain: "The relative property is exact and holds in every layer, which is why RoPE became the default in LLM backbones."
+
+  - q: "You port a Llama-style checkpoint into your own code. It runs without errors but generates nonsense. Which are plausible causes?"
+    type: multi
+    options:
+      - text: "Your RoPE rotates interleaved pairs while the checkpoint was trained with the rotate-half layout."
+        correct: true
+        why: "Both layouts are valid encodings, but weights trained with one are wrong under the other."
+      - text: "You forgot the final RMSNorm before the output head of a pre-norm model."
+        correct: true
+        why: "The residual stream's scale is then wrong at the head."
+      - text: "Your `nn.Linear` weights are loaded without transposing although the checkpoint stores them as `(d_out, d_in)`."
+        correct: true
+        why: "For square matrices this loads silently and computes $W^\\top$ instead of $W$."
+      - text: "You used bf16 instead of fp32 for inference."
+        why: "bf16 inference is standard and produces nearly identical outputs."
+    explain: "Silent porting bugs are shape-preserving. Compare intermediate activations layer by layer against a reference implementation."
+
+  - q: "Why is the residual stream view useful?"
+    type: multi
+    options:
+      - text: "Each sub-layer reads from and adds to a shared $T\\times d$ state, so the final state is the input plus a sum of contributions."
+        correct: true
+        why: "That is the residual-stream decomposition."
+      - text: "The identity path keeps gradients flowing through deep stacks."
+        correct: true
+        why: "$\\partial X^{(\\ell+1)}/\\partial X^{(\\ell)}=I+\\partial f/\\partial X$."
+      - text: "It allows applying the output head to intermediate layers (logit lens) to see what the model currently predicts."
+        correct: true
+        why: "Intermediate states live in the same space as the final one."
+      - text: "It removes the need for normalisation."
+        why: "Pre-norm models still normalise each sub-layer's input and the final state."
+    explain: "The residual stream is the right mental model for interpreting and debugging transformers, including VLA backbones."
+
+  - q: "In a pre-norm block, where is the normalisation placed?"
+    type: single
+    options:
+      - text: "On the input of each sub-layer branch; the residual path stays an exact identity."
+        correct: true
+        why: "$X+\\operatorname{MHA}(\\operatorname{Norm}(X))$."
+      - text: "After the residual addition: $\\operatorname{Norm}(X+\\operatorname{MHA}(X))$."
+        why: "That is post-norm (the original transformer)."
+      - text: "Across the batch dimension, like batch normalisation."
+        why: "Transformers normalise each token over features, never across the batch."
+      - text: "Only once, at the input embedding."
+        why: "Every sub-layer has its own normalisation."
+    explain: "Pre-norm is more stable at depth; it requires a final norm before the output head."
+
+  - q: "Training a TinyGPT, the loss drops to $\\approx0.01$ within a few hundred steps, but generations are garbage. The most likely bug is…"
+    type: single
+    options:
+      - text: "The learning rate is too low."
+        why: "A low learning rate makes loss decrease *slowly*."
+      - text: "Inputs and targets are not shifted, so the model learns to copy the current token."
+        correct: true
+        why: "With targets equal to inputs, predicting the input token is trivial and the loss collapses."
+      - text: "Weight tying is enabled."
+        why: "Tying is standard and does not cause this."
+      - text: "The vocabulary is too small."
+        why: "That would not make the loss collapse to zero."
+    explain: "Always check the initial loss ($\\approx\\log V$) and look at samples. A suspiciously low loss is a bug until proven otherwise."
+
+  - q: "In token-based VLA training (e.g. OpenVLA), the loss mask is set so that…"
+    type: single
+    options:
+      - text: "…only the action tokens (and the end token) contribute to the loss; image and prompt tokens are context."
+        correct: true
+        why: "The model must learn to *produce* actions, not to predict the prompt."
+      - text: "…all tokens contribute, including image tokens."
+        why: "Image tokens are continuous embeddings, not vocabulary items; they have no targets."
+      - text: "…only the prompt tokens contribute, to preserve language ability."
+        why: "Then the model would never learn actions."
+      - text: "…loss masking is not used for VLAs."
+        why: "It is essential: it defines what is learned."
+    explain: "Loss masking selects what the model learns to say. Co-training on web data (Chapter 9) adds back losses on text answers."
+
+  - q: |
+      A 7B model in bf16 is decoded at batch size 1 on a GPU with 200 GB/s memory bandwidth. Which is the best estimate of the lower bound per generated token?
+    type: single
+    options:
+      - text: "≈0.07 ms — bounded by the GPU's FLOP rate."
+        why: "Decode at batch 1 is not compute-bound."
+      - text: "≈70 ms — every weight (14 GB) must be read once per token."
+        correct: true
+        why: "$14\\,\\text{GB}/200\\,\\text{GB/s}=70$ ms."
+      - text: "≈7 ms — only the last layer is executed per token."
+        why: "All layers run for every token."
+      - text: "≈700 ms — attention over the context dominates."
+        why: "For short contexts attention is a small fraction of the cost."
+    explain: "At batch 1, decode is memory-bandwidth-bound. Quantisation to 4-bit cuts the bytes read, and therefore the time, by ≈4×."
+
+  - q: "What does the KV cache store, and how much memory does it need per token for $L=32$, $h_\\text{kv}=8$, $d_h=128$, bf16?"
+    type: single
+    options:
+      - text: "Past keys and values for every layer; $2\\cdot32\\cdot8\\cdot128\\cdot2=131{,}072$ bytes ≈ 128 KiB per token."
+        correct: true
+        why: "Factor 2 for K and V, bytes = 2 for bf16."
+      - text: "Past queries, keys and values; 192 KiB per token."
+        why: "Past queries are never needed again."
+      - text: "Past logits; $V\\cdot2$ bytes per token."
+        why: "Logits are not cached."
+      - text: "Past attention weights; $T^2$ entries."
+        why: "Attention weights are recomputed for each new query."
+    explain: "GQA reduces $h_\\text{kv}$ and so the cache — important when memory is shared with images, a planner and ROS on a robot computer."
+
+  - q: "Which statements about $C\\approx6ND$ and scaling laws are correct?"
+    type: multi
+    options:
+      - text: "The 6 comes from ≈2N FLOPs per token forward and ≈4N backward."
+        correct: true
+        why: "Backward computes gradients w.r.t. both inputs and weights, each the size of the forward product."
+      - text: "Chinchilla suggests scaling parameters and tokens together, ≈20 tokens per parameter at the compute-optimal point."
+        correct: true
+        why: "Both exponents are ≈0.5."
+      - text: "Small models are often trained far beyond compute-optimal because inference cost depends on N."
+        correct: true
+        why: "E.g. SmolLM2-135M on ~2T tokens."
+      - text: "Robot-policy success rates are known to follow the same power law in demonstrations."
+        why: "Whether and how robot policies scale is open; data diversity appears to matter more than volume."
+    explain: "Scaling laws turned LLM design into forecasting. For robots, the analogous laws are an open research problem."

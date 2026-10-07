@@ -1,0 +1,117 @@
+title: "Chapter 4 — Check your understanding"
+questions:
+  - q: "In a CLIP batch of $B$ pairs, the similarity matrix $S$ is $B\\times B$. Which statement about the InfoNCE loss is correct?"
+    type: single
+    options:
+      - text: "Each row is a softmax over the $B$ captions with the diagonal as the target; each column likewise over the images; the two cross-entropies are averaged."
+        correct: true
+        why: "That is the symmetric InfoNCE of CLIP."
+      - text: "Each entry is an independent binary classification of match vs non-match."
+        why: "That is SigLIP's sigmoid loss."
+      - text: "The softmax runs over the whole matrix, so the $B$ diagonal entries compete with each other."
+        why: "The normalisation is per row (or per column), not global."
+      - text: "Only the diagonal enters the loss; off-diagonal entries are ignored."
+        why: "Off-diagonal entries are the negatives in every softmax denominator."
+    explain: "The negatives are the other captions (images) of the same batch, which is why batch composition decides what the model learns to distinguish."
+
+  - q: "For image $i$, the gradient of $\\mathcal{L}_{I\\to T}$ with respect to its embedding is $\\frac{1}{B\\tau}(\\sum_jp_{ij}\\mathbf{v}_j-\\mathbf{v}_i)$. Which statements follow?"
+    type: multi
+    options:
+      - text: "A caption that the model already assigns near-zero probability contributes almost nothing to the update."
+        correct: true
+        why: "Its weight $p_{ij}$ is near zero."
+      - text: "Negatives similar to the positive (hard negatives) dominate the push."
+        correct: true
+        why: "They have the largest $p_{ij}$ among the negatives."
+      - text: "The gradient vanishes when $p_{ii}=1$."
+        correct: true
+        why: "Then $\\sum_jp_{ij}\\mathbf{v}_j=\\mathbf{v}_i$."
+      - text: "Lowering the temperature makes all negatives contribute equally."
+        why: "Lower $\\tau$ makes the softmax more peaked, concentrating the push on the hardest negatives."
+    explain: "This is why batches that never contain hard negatives (captions that differ only in word order) never teach word order."
+
+  - q: "Why does SigLIP initialise its learned bias at $b=-10$?"
+    type: single
+    options:
+      - text: "Out of $B^2$ pairs only $B$ are positive; starting with strongly negative logits already predicts 'mismatch' for almost all pairs, so early gradients are not wasted learning the class prior."
+        correct: true
+        why: "With $b=0$ the $B^2-B$ negatives would produce a huge initial loss and gradient."
+      - text: "To make the softmax over the batch numerically stable."
+        why: "SigLIP has no softmax over the batch."
+      - text: "Because cosines are negative at initialisation."
+        why: "They are near zero."
+      - text: "To implement the temperature."
+        why: "The temperature is the separate scale $t$."
+    explain: "The bias is the logit-space prior of the binary problem; with $B=32\\,768$, positives are 0.003% of pairs."
+
+  - q: "CLIP ViT-B/32 recognises colours of single depot objects with 100% accuracy (Lab 07) yet chooses between 'a red toolbox to the left of a blue crate' and 'a blue toolbox to the left of a red crate' at chance. What is the best explanation?"
+    type: single
+    options:
+      - text: "Its training batches almost never contained negatives that differ only in which word binds to which object, so the loss never required binding."
+        correct: true
+        why: "The contrastive loss rewards only what separates a caption from the other captions in the batch."
+      - text: "The image resolution is too low to see the colours."
+        why: "Colours are recognised perfectly on the same renders."
+      - text: "The text encoder cannot read the word 'left'."
+        why: "It can; the issue is that the training signal did not depend on it."
+      - text: "The modality gap makes all similarities equal."
+        why: "The gap shifts absolute similarities but rankings still work for retrieval."
+    explain: "Hard-negative training (NegCLIP) largely fixes this, which confirms the cause is the data, not the architecture."
+
+  - q: "A VLM must process 3 camera images of $27\\times27$ SigLIP patches each with an LM of width 2048. Which connector gives the fewest image tokens while keeping every patch's values available to the LM's input projection?"
+    type: single
+    options:
+      - text: "Pixel shuffle with $r=3$: $81$ tokens per image, each the concatenation of a $3\\times3$ block."
+        correct: true
+        why: "$729/9=81$; nothing is averaged away before the projection."
+      - text: "An MLP projector: 729 tokens per image."
+        why: "Keeps everything but reduces nothing."
+      - text: "Average pooling $3\\times3$: 81 tokens per image."
+        why: "Same count, but averaging discards information before the projection."
+      - text: "A 32-query resampler: 32 tokens per image."
+        why: "Fewer tokens, but the learned queries decide what survives; the patch values are not individually available."
+    explain: "Pixel shuffle moves information from sequence length (quadratic cost) to width (linear cost)."
+
+  - q: "Flamingo inserts gated cross-attention blocks into a frozen LM with $\\mathbf{x}\\leftarrow\\mathbf{x}+\\tanh(\\alpha)\\,\\mathrm{CrossAttn}(\\mathbf{x},Z)$ and $\\alpha$ initialised at 0. Why?"
+    type: single
+    options:
+      - text: "At initialisation the new blocks are exactly the identity, so the frozen LM's behaviour (and knowledge) is preserved; visual input is blended in as $\\alpha$ grows."
+        correct: true
+        why: "The same 'initialise new pathways to do nothing' principle as zero-initialised FiLM and LoRA."
+      - text: "To keep the cross-attention weights positive."
+        why: "The gate scales the block's output; it says nothing about attention weights."
+      - text: "Because tanh is cheaper than a sigmoid."
+        why: "Cost is irrelevant here."
+      - text: "To prevent the image tokens from attending to text."
+        why: "In this block text queries read image keys/values; the gate controls how much is added."
+    explain: "When you attach a new modality or an action head to a pretrained model, start it as a no-op."
+
+  - q: "PaliGemma writes a box as four tokens from `<loc0000>`–`<loc1023>`. For a normalised coordinate $c$, the bin is $\\mathrm{round}(1023c)$. What is the maximum quantisation error on a 224-pixel image axis, and which later idea uses the same mechanism?"
+    type: single
+    options:
+      - text: "About 0.11 pixels; discretised action tokens in RT-2/OpenVLA."
+        correct: true
+        why: "$\\frac{1}{2\\cdot1023}\\cdot224\\approx0.11$ px. VLAs discretise each action dimension into bins with their own tokens."
+      - text: "About 0.22 pixels; positional encodings."
+        why: "0.22 px is the bin width; the maximum error is half of it. Positional encodings are unrelated."
+      - text: "About 1 pixel; tokenization by BPE."
+        why: "The bins are far finer than a pixel at this resolution."
+      - text: "Zero, because the tokens are continuous."
+        why: "They are discrete vocabulary entries."
+    explain: "Coordinates-as-tokens lets a language model output any continuous quantity with its ordinary cross-entropy training — at the price of one token per number."
+
+  - q: "Which of the following are expected consequences of the modality gap measured in Lab 07 (matched cosine 0.30, image–image 0.87)?"
+    type: multi
+    options:
+      - text: "Retrieval (ranking captions for an image) still works."
+        correct: true
+        why: "Only rankings within one modality matter."
+      - text: "A fixed threshold such as 'cosine > 0.5 means the caption matches' would reject almost all correct matches."
+        correct: true
+        why: "Matched pairs sit around 0.30."
+      - text: "Averaging an image embedding and a text embedding gives a vector that lies in neither cluster."
+        correct: true
+        why: "It falls in the gap between the two cones."
+      - text: "Zero-shot classification is impossible."
+        why: "It works: it is a ranking of prompts for one image."
+    explain: "Calibrate thresholds on in-domain data, and never mix modalities' embeddings naively."

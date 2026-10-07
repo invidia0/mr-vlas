@@ -1,0 +1,116 @@
+title: "Chapter 3 — Check your understanding"
+questions:
+  - q: "A convolution layer has $C_\\text{in}=64$, $C_\\text{out}=128$, kernel $3\\times3$, stride 2, padding 1, applied to a $56\\times56$ feature map. What are the output spatial size and the number of parameters (with bias)?"
+    type: single
+    options:
+      - text: "$28\\times28$; $73{,}856$ parameters."
+        correct: true
+        why: "$\\lfloor(56+2-3)/2\\rfloor+1=28$; $3\\cdot3\\cdot64\\cdot128+128=73{,}856$."
+      - text: "$56\\times56$; $73{,}856$ parameters."
+        why: "Stride 2 halves the resolution."
+      - text: "$28\\times28$; $73{,}856\\cdot28^2$ parameters."
+        why: "Weights are shared across positions: the count does not depend on the map size. The FLOPs do."
+      - text: "$27\\times27$; $1{,}152$ parameters."
+        why: "Padding 1 keeps the size at $\\lfloor55/2\\rfloor+1=28$; and the parameter count must include both channel dimensions."
+    explain: "Parameters scale with $k^2C_\\text{in}C_\\text{out}$; compute scales additionally with the output area $H'W'$."
+
+  - q: "Which statements about translation equivariance are correct?"
+    type: multi
+    options:
+      - text: "A stride-1 convolution with circular padding is exactly translation-equivariant."
+        correct: true
+        why: "The output at $(i,j)$ depends on the input only through the window at $(i,j)$, with the same kernel everywhere."
+      - text: "A ViT's patch embedding is equivariant to shifts by any number of pixels."
+        why: "Only shifts by multiples of $P$ map patches onto patches; a 3-pixel shift changes every patch (Lab 06 measures a 33% relative change)."
+      - text: "Adding learned position embeddings breaks translation equivariance of a ViT."
+        correct: true
+        why: "The same content at a different slot receives a different position vector."
+      - text: "Global average pooling after convolutions turns equivariance into invariance."
+        correct: true
+        why: "Shifting a map does not change its mean (up to border effects)."
+    explain: "Equivariance is what manipulation needs (features move with the object); invariance is what recognition needs. Know which one your architecture gives you."
+
+  - q: "ViT-B/16 ($d=768$, $L=12$) runs at $224\\times224$ and then at $448\\times448$. Approximately how do the number of patch tokens and the encoder FLOPs change?"
+    type: single
+    options:
+      - text: "Tokens ×4; FLOPs slightly more than ×4."
+        correct: true
+        why: "$N_p$ goes from 196 to 784. The linear term $2N_p\\cdot12Ld^2$ grows ×4 and dominates; the quadratic attention term grows ×16 but is small at this size."
+      - text: "Tokens ×2; FLOPs ×4."
+        why: "Tokens scale with image area, not side length."
+      - text: "Tokens ×4; FLOPs ×16."
+        why: "Only the attention term is quadratic, and for ViT-B at these sizes it is a few percent of the total."
+      - text: "Tokens unchanged; the position table limits the resolution."
+        why: "The table is interpolated to the new grid; the token count follows $HW/P^2$."
+    explain: "For VLAs, remember that the image tokens are also processed by the language backbone, where they may cost far more than in the encoder."
+
+  - q: "Lab 06 trains a small CNN and a ViT on 100 depot images: 92% vs 64% test accuracy. With 4000 images both exceed 98%. What is the best explanation?"
+    type: single
+    options:
+      - text: "The CNN's built-in locality and weight sharing are correct assumptions about images and act as prior knowledge; the ViT must learn them from data."
+        correct: true
+        why: "This is the inductive-bias argument; the gap closes as data grows."
+      - text: "The ViT has fewer parameters and underfits."
+        why: "It has about four times more parameters than the CNN."
+      - text: "Attention cannot represent local features."
+        why: "Attention can attend locally; it just has to learn to."
+      - text: "The ViT needs a higher learning rate."
+        why: "Both reach high accuracy at 4000 images with the same schedule; the difference is data efficiency."
+    explain: "This is the ViT paper's main empirical message in miniature, and the reason VLAs never train their vision encoder from scratch on robot data."
+
+  - q: "In DINO, what prevents the student and teacher from collapsing to a constant output?"
+    type: multi
+    options:
+      - text: "Centering the teacher's outputs with a running mean, so that no single prototype can dominate for all images."
+        correct: true
+        why: "Centering removes the 'same dimension always wins' solution."
+      - text: "Sharpening the teacher with a low temperature, so its targets cannot become uniform."
+        correct: true
+        why: "Centering alone pushes toward uniform; sharpening counteracts it."
+      - text: "Negative pairs: images from the batch that must be pushed apart."
+        why: "DINO uses no negatives — that is what distinguishes it from contrastive methods (Chapter 4)."
+      - text: "Labels from ImageNet used in a small auxiliary loss."
+        why: "DINO uses no labels at all."
+    explain: "The EMA teacher additionally provides slowly moving, slightly better targets. All three are needed; ablating centering or sharpening collapses training."
+
+  - q: "Why does MAE mask 75% of the patches rather than 15% as BERT masks words?"
+    type: single
+    options:
+      - text: "Images are spatially redundant: with few masked patches they can be filled in by interpolating neighbours, which teaches little."
+        correct: true
+        why: "A high ratio forces reasoning about objects and layout. It also makes the encoder cheap, since it processes only visible patches."
+      - text: "To make reconstruction impossible, so the loss stays high and gradients stay large."
+        why: "Reconstruction remains possible and the loss decreases; the point is what must be learned to achieve it."
+      - text: "Because ViTs cannot process more than 25% of an image."
+        why: "They can; MAE chooses not to during pretraining for efficiency."
+      - text: "Because the decoder is larger than the encoder."
+        why: "The opposite: the decoder is deliberately small."
+    explain: "The masking ratio is a statement about the information density of the modality."
+
+  - q: "Your VLA's vision encoder outputs a $32\\times32$ grid of 768-d tokens for a 512-px image. You apply pixel shuffle with $r=4$ and a linear projection to the LM width 576. What reaches the LM, and what was lost?"
+    type: single
+    options:
+      - text: "64 tokens of width 576 (via 12 288-d intermediate tokens); nothing is discarded by the shuffle itself — neighbouring tokens are concatenated, and the projection decides what survives."
+        correct: true
+        why: "$1024/16=64$ tokens of width $16\\cdot768$; this is SmolVLM-256M's connector (Lab 08)."
+      - text: "64 tokens; every block of 16 tokens was averaged, losing detail."
+        why: "That would be average pooling. Pixel shuffle concatenates."
+      - text: "1024 tokens of width 48."
+        why: "Pixel shuffle moves information from the sequence dimension into the feature dimension, not the reverse."
+      - text: "16 tokens of width 576."
+        why: "$r=4$ divides the token count by $r^2=16$: 1024 → 64."
+    explain: "Moving information from sequence length (quadratic cost in attention) to width (linear cost) is a cheap way to cut a VLA's prefill time."
+
+  - q: "A drone flies at 30 m with a 90° horizontal field of view and a 224-px wide image. Roughly how many pixels wide is a 40 cm toolbox?"
+    type: single
+    options:
+      - text: "About 1.5 pixels."
+        correct: true
+        why: "Footprint $2\\cdot30\\cdot\\tan45^\\circ=60$ m; $60/224=0.27$ m per pixel; $0.4/0.27\\approx1.5$."
+      - text: "About 15 pixels."
+        why: "That would require a footprint of about 6 m."
+      - text: "About 40 pixels."
+        why: "Check the ground footprint: $2h\\tan(\\text{FOV}/2)$."
+      - text: "It depends only on the patch size."
+        why: "Patch size determines how many pixels form a token, not how many pixels the object covers."
+    explain: "Do this computation before choosing an encoder: if the object covers a fraction of a patch, no encoder will find it. Tiling, foveation or flying lower are the fixes."

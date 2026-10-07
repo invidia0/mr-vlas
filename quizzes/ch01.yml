@@ -1,0 +1,130 @@
+title: "Chapter 1 — Check your understanding"
+questions:
+  - q: "A language model's forward pass on a prompt of $T$ tokens returns logits of shape `(1, T, V)`. During generation, which part is used to choose the next token?"
+    type: single
+    options:
+      - text: "The last row, `logits[:, -1]`: the distribution over the token following the whole prefix."
+        correct: true
+        why: "Row $t$ predicts token $t+1$; only the last row conditions on the entire prompt."
+      - text: "The first row, since it contains the beginning-of-sequence information."
+        why: "Row 0 predicts token 1 from the first token only."
+      - text: "The mean over all $T$ rows."
+        why: "Averaging mixes predictions for different positions; it is not a meaningful distribution."
+      - text: "Any row, they are all identical because of the causal mask."
+        why: "Each row conditions on a different prefix, so they differ."
+    explain: "All $T$ rows are used in training (each position predicts its successor). At generation only the last row is needed — which is also why a KV cache can avoid recomputing the others."
+
+  - q: "Nucleus (top-$p$) sampling with $p=0.9$ on a model that is very confident (top token has probability 0.95)…"
+    type: single
+    options:
+      - text: "…samples among roughly the top 90% of the vocabulary."
+        why: "$p$ is a probability mass, not a fraction of the vocabulary."
+      - text: "…behaves like greedy decoding, because the nucleus contains only the top token."
+        correct: true
+        why: "The top token alone already exceeds 0.9 cumulative mass."
+      - text: "…is identical to temperature sampling with $\\tau=0.9$."
+        why: "Temperature rescales all logits; top-$p$ truncates the tail."
+      - text: "…samples uniformly among the top 10 tokens."
+        why: "That would be a (uniform) top-$k$ rule."
+    explain: "Top-$p$ adapts the candidate set to the model's confidence: narrow when confident, wide when uncertain."
+
+  - q: "OpenVLA decodes its action tokens greedily, one action dimension after another. The demonstrations for the current situation are bimodal (pass an obstacle on the left or on the right). Which statements are correct?"
+    type: multi
+    options:
+      - text: "Each dimension is chosen conditioned on the previously decoded ones, so the decoded action is usually coherent with one mode."
+        correct: true
+        why: "Autoregressive conditioning keeps later dimensions consistent with earlier choices."
+      - text: "Greedy decoding is guaranteed to return the most probable joint action."
+        why: "Per-step argmax is not joint maximisation; beam search approximates the latter."
+      - text: "If the two modes are nearly tied, small image changes between control steps can flip the chosen mode, so the robot dithers."
+        correct: true
+        why: "The argmax is discontinuous near ties; consecutive steps can pick different modes."
+      - text: "Greedy decoding averages the two modes, like MSE regression."
+        why: "An argmax over bins picks a bin; it never averages. Averaging is the MSE failure."
+    explain: "Discrete autoregressive heads avoid averaging but make the decoding rule part of the controller and are prone to mode switching between steps. Chapter 8 compares them with heads that sample a whole action chunk jointly."
+
+  - q: "Why are raw pixel vectors a poor representation for comparing two images of the depot?"
+    type: multi
+    options:
+      - text: "A small camera shift changes nearly every pixel, so semantically identical images can be far apart."
+        correct: true
+        why: "Pixel distance is not invariant to small translations."
+      - text: "They are very high-dimensional and dominated by nuisance factors such as lighting."
+        correct: true
+        why: "$\\approx1.5\\times10^5$ numbers for a $224^2$ image, most of which encode nuisance variation."
+      - text: "Pixels cannot be stored as floating-point tensors."
+        why: "They can; they usually are after preprocessing."
+      - text: "Pixels contain no information about object identity."
+        why: "They contain all the information; it is just not linearly accessible by distance."
+    explain: "A good visual representation is invariant to nuisances, equivariant to task-relevant changes (position), semantic and compact — goals that partly conflict."
+
+  - q: "You feed images normalised with the wrong per-channel mean and std into a pretrained SigLIP encoder. What typically happens?"
+    type: single
+    options:
+      - text: "A runtime error from the encoder."
+        why: "Shapes are unchanged; nothing checks the statistics."
+      - text: "Nothing, because encoders are invariant to affine changes of input intensities."
+        why: "Networks are not invariant to arbitrary input shifts; their first layers were tuned to the training statistics."
+      - text: "Features are silently degraded; downstream performance drops without any error."
+        correct: true
+        why: "The input distribution is shifted relative to pretraining, so activations are off-distribution."
+      - text: "The encoder automatically re-normalises internally."
+        why: "Most encoders do not; the preprocessor (processor/transform) is responsible."
+    explain: "Preprocessing mismatches are among the most common silent bugs when assembling VLM/VLA pipelines from pretrained parts."
+
+  - q: "Which statement best describes FiLM conditioning?"
+    type: single
+    options:
+      - text: "Features $\\mathbf{h}$ are modulated per channel: $\\boldsymbol\\gamma(\\mathbf{c})\\odot\\mathbf{h}+\\boldsymbol\\beta(\\mathbf{c})$, with the same scale and shift at every spatial position."
+        correct: true
+        why: "That is FiLM. It is cheap ($O(d)$ per token) and global."
+      - text: "Each image token attends to each text token with a softmax over text positions."
+        why: "That is cross-attention."
+      - text: "Text tokens are appended to the image token sequence."
+        why: "That is in-sequence concatenation."
+      - text: "The condition is added once to the final output logits."
+        why: "FiLM modulates intermediate features, usually in many layers."
+    explain: "FiLM lets the condition change what features mean without the cost of attention. RT-1 uses it to condition the image encoder on the instruction."
+
+  - q: "You add a FiLM layer into a *pretrained* vision encoder. Why initialise its $\\gamma,\\beta$ predictor so that the layer starts as the identity?"
+    type: single
+    options:
+      - text: "To keep the number of parameters small."
+        why: "Initialisation does not change parameter count."
+      - text: "So the pretrained network's behaviour is preserved at the start of fine-tuning; the new pathway is learned gradually."
+        correct: true
+        why: "A random modulation would scramble pretrained features and destroy what the network knows."
+      - text: "Because zero-initialised weights cannot receive gradients."
+        why: "Zero-initialised *final* layers receive gradients fine (the gradient w.r.t. $W$ depends on the input, not on $W$)."
+      - text: "To make the layer non-differentiable."
+        why: "Initialisation does not affect differentiability."
+    explain: "\"Initialise new pathways to do nothing\" recurs in adaLN-Zero, LoRA and ControlNet."
+
+  - q: "Compare in-sequence concatenation of $N_p$ image tokens with $T$ text tokens versus cross-attention from the $T$ text tokens to the $N_p$ image tokens. Which are correct?"
+    type: multi
+    options:
+      - text: "Concatenation costs $O((N_p+T)^2)$ attention scores per layer; cross-attention costs $O(TN_p)$."
+        correct: true
+        why: "Self-attention over the concatenated sequence computes all pairs."
+      - text: "With concatenation, image tokens can also be updated by text tokens (if the mask allows)."
+        correct: true
+        why: "Self-attention is symmetric in which tokens read which, subject to masks."
+      - text: "With cross-attention, the image tokens are updated by reading the text."
+        why: "In cross-attention from text to image, only the queries (text) are updated."
+      - text: "Both approaches require the image and text to have the same number of tokens."
+        why: "Neither does."
+    explain: "In-sequence fusion is maximal interaction at maximal cost; cross-attention is cheaper and asymmetric."
+
+  - q: "Why does a VLA need robot data even if it starts from a VLM trained on billions of image–text pairs?"
+    type: single
+    options:
+      - text: "Because VLMs cannot process images from robot cameras."
+        why: "They can; the images are just out of distribution."
+      - text: "Because image–text data grounds words in appearance but not in actions and their physical consequences (the grounding problem)."
+        correct: true
+        why: "Knowing what a toolbox looks like is not knowing how to grasp it."
+      - text: "Because the VLM's tokenizer cannot represent robot instructions."
+        why: "Instructions are ordinary text."
+      - text: "Because VLMs are too small."
+        why: "Size does not supply missing modalities."
+    explain: "Embodied grounding needs data where actions and their effects appear. This is why robot data is the bottleneck of the field."

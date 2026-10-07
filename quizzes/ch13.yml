@@ -1,0 +1,74 @@
+title: "Chapter 13 — Check your understanding"
+questions:
+  - q: "In a PX4-based drone, which component should stabilise the vehicle's attitude?"
+    type: single
+    options:
+      - text: "The flight controller's rate and attitude controllers, at hundreds to thousands of hertz."
+        correct: true
+        why: "Only the FC runs fast enough and owns the failsafes."
+      - text: "The VLA on the companion computer."
+        why: "It runs at 1–10 Hz with a latency tail."
+      - text: "The ground station."
+        why: "Link latency and loss make this impossible."
+      - text: "The ROS 2 executor."
+        why: "ROS 2 carries messages; it does not stabilise anything."
+    explain: "A VLA on a drone is a requester of setpoints, never the owner of the vehicle."
+
+  - q: "Which statements about PX4 offboard control are correct?"
+    type: multi
+    options:
+      - text: "The companion must keep streaming OffboardControlMode (≥ 2 Hz); if it stops, PX4 executes a failsafe."
+        correct: true
+        why: "The heartbeat is the protocol."
+      - text: "Unused TrajectorySetpoint fields should be NaN; zeros mean 'go to zero'."
+        correct: true
+        why: "A classic first-flight bug."
+      - text: "PX4 local positions are in NED, ROS conventions in ENU."
+        correct: true
+        why: "Convert explicitly."
+      - text: "Offboard mode disables PX4's geofence."
+        why: "PX4's protections stay active."
+    explain: "Offboard delegates tracking, not judgement or protection."
+
+  - q: "Why does a goal-level architecture tolerate VLA latency much better than direct velocity streaming?"
+    type: single
+    options:
+      - text: "Latency only delays when a new goal is adopted; the fast loop that flies to the goal uses the current state, so stability does not depend on the VLA's delay."
+        correct: true
+        why: "Dead time stays out of the fast feedback loop."
+      - text: "Goal-level VLAs are smaller."
+        why: "The same model can be used both ways (Lab 15)."
+      - text: "Goals are sent over a faster link."
+        why: "The link is the same."
+      - text: "Waypoints are always correct."
+        why: "Wrong goals remain possible; they just do not destabilise flight."
+    explain: "Put the VLA's latency where it costs decisions, not stability."
+
+  - q: "A velocity-controlled drone obeys ẋ = k(x* − x(t − δ)) with δ = 0.3 s. Which gains are stable?"
+    type: single
+    options:
+      - text: "k < π/(2δ) ≈ 5.2 s⁻¹; and only k < 1/(eδ) ≈ 1.2 s⁻¹ approaches the target without oscillating."
+        correct: true
+        why: "The delay equation s + k e^{−sδ} = 0 is stable iff kδ < π/2, and non-oscillatory iff kδ < 1/e."
+      - text: "All gains: delay does not affect stability."
+        why: "Dead time destabilises feedback."
+      - text: "Only k > 10 s⁻¹."
+        why: "High gains are the unstable ones."
+      - text: "k < δ."
+        why: "Wrong units and wrong bound."
+    explain: "Latency forces slow, gentle direct control — the opposite of what agile flight needs."
+
+  - q: "In the defence-in-depth architecture, which layers must work even if the companion computer crashes?"
+    type: multi
+    options:
+      - text: "PX4's offboard-loss failsafe and geofence."
+        correct: true
+        why: "They run on the flight controller."
+      - text: "The pilot's RC override and kill switch."
+        correct: true
+        why: "They must not depend on the companion."
+      - text: "The CBF setpoint filter."
+        why: "It runs on the companion and fails with it."
+      - text: "The companion's watchdog."
+        why: "Also on the companion; that is why PX4's own failsafes exist."
+    explain: "Independent layers on independent hardware are what make the product of failure probabilities small."

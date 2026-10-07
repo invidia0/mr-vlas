@@ -1,0 +1,101 @@
+title: "Chapter 8 — Check your understanding"
+questions:
+  - q: "A token-based VLA emits 7 action tokens per action; one backbone decode pass takes 15 ms and the prefill 60 ms. A flow-matching VLA with the same backbone runs a 4 ms expert 10 times. Per *action chunk of one action*, which is faster, and what changes with 50-step chunks?"
+    type: single
+    options:
+      - text: "Flow (≈100 ms vs ≈165 ms); with 50-step chunks the token head needs 350 decode passes (≈5.3 s) while the flow cost is unchanged."
+        correct: true
+        why: "Token: 60 + 7×15; flow: 60 + 10×4. Chunking multiplies token decoding, not flow steps."
+      - text: "Token-based, because it needs fewer sequential steps."
+        why: "Its steps are full backbone passes."
+      - text: "They are equal because both run the backbone."
+        why: "The token head runs the backbone once per token."
+      - text: "Flow, but 50-step chunks make the flow head 50× slower."
+        why: "The expert denoises the whole chunk in parallel."
+    explain: "This asymmetry explains why long-chunk, high-rate VLAs use action experts — or compress tokens with FAST."
+
+  - q: "Which statements about π0's block-wise attention mask are correct?"
+    type: multi
+    options:
+      - text: "Image and text tokens never attend to the action tokens."
+        correct: true
+        why: "So their keys/values do not depend on the noisy chunk."
+      - text: "The prefix's keys and values can be cached and reused across all denoising steps."
+        correct: true
+        why: "That is what makes $N$ denoising steps cheap."
+      - text: "Action tokens attend to each other bidirectionally and to the whole prefix."
+        correct: true
+        why: "The chunk is denoised jointly."
+      - text: "Action tokens are processed with the VLM's own weights."
+        why: "They use the action expert's separate (narrower) weights."
+    explain: "One sequence, two weight sets, a mask that makes perception independent of the action being generated."
+
+  - q: "A VLA trained on 50 Hz demonstrations is deployed with actions executed at 10 Hz. With delta end-effector actions, what happens?"
+    type: single
+    options:
+      - text: "Each commanded delta still moves the same distance, but they come 5× less often: the robot moves 5× slower than demonstrated, and the visual states it sees no longer match the training trajectories' timing."
+        correct: true
+        why: "Actions are defined per step; changing the step changes the dynamics."
+      - text: "Nothing: deltas are rate-independent."
+        why: "Velocity per step depends on the step duration."
+      - text: "The robot moves 5× faster."
+        why: "Fewer steps per second means slower motion for per-step deltas."
+      - text: "The policy compensates automatically."
+        why: "It was never trained on that rate."
+    explain: "Execute at the recorded rate; if you must change it, resample the training data."
+
+  - q: "Why do token-based VLAs autoregress across action dimensions instead of predicting each dimension with an independent categorical?"
+    type: single
+    options:
+      - text: "To keep the dimensions coherent within one mode of a multimodal action distribution."
+        correct: true
+        why: "Independent heads can mix dimensions from different modes (Lab 09: 51% invalid)."
+      - text: "Because transformers cannot output several tokens at once."
+        why: "They can (OFT's parallel decoding); it trades coherence for speed."
+      - text: "To reduce latency."
+        why: "Autoregression increases latency."
+      - text: "Because the bins are ordered."
+        why: "Bin order is irrelevant to the factorisation."
+    explain: "Autoregression is the token family's way of modelling the joint distribution."
+
+  - q: "With temporal ensembling, a stochastic flow-matching policy re-queried every step faces two equally good detours. What can go wrong?"
+    type: single
+    options:
+      - text: "Consecutive chunks may choose different detours; averaging their predictions yields an action between them — regression to the mean through the obstacle."
+        correct: true
+        why: "Ensembling averages; it is safe only when the averaged predictions agree."
+      - text: "Nothing: ensembling always picks the most frequent mode."
+        why: "It computes a weighted mean, not a vote."
+      - text: "The robot freezes because the weights sum to zero."
+        why: "Weights are positive and normalised."
+      - text: "The policy becomes deterministic."
+        why: "Its samples are still random; only their average is executed."
+    explain: "ACT is deterministic at test time ($\\mathbf{z}=\\mathbf{0}$), so ensembling only smooths it; stochastic heads need consistency mechanisms."
+
+  - q: "A drone VLA is being designed. Which action space is appropriate?"
+    type: single
+    options:
+      - text: "Velocity or position setpoints consumed by PX4's controllers, which keep attitude stabilisation, limits and failsafes."
+        correct: true
+        why: "The VLA's rate and reliability are far below what inner loops need."
+      - text: "Individual motor thrusts at 400 Hz."
+        why: "No VLA runs at that rate, and an error is a crash."
+      - text: "Attitude rates at 250 Hz."
+        why: "Still an inner loop with unstable open-loop dynamics."
+      - text: "Raw PWM values."
+        why: "Bypasses every safety mechanism."
+    explain: "The action space is the contract with the control stack: choose one whose consumer is stable and enforces limits (Chapter 13)."
+
+  - q: "A policy trained with proprioception achieves low loss but ignores a moved object at test time and replays its usual motion. What is the most likely cause?"
+    type: single
+    options:
+      - text: "A copycat shortcut: in smooth demonstrations the state largely predicts the next action, so the policy learned to extrapolate its own motion instead of reading the images."
+        correct: true
+        why: "Low loss, poor closed-loop behaviour exactly when images matter."
+      - text: "The image encoder is frozen."
+        why: "Possible, but the symptom points at reliance on the state."
+      - text: "The instruction template changed."
+        why: "That would affect task selection, not this pattern."
+      - text: "Temporal ensembling."
+        why: "Ensembling smooths actions; it does not create state reliance."
+    explain: "Remedies: state dropout or noise during training, chunked targets, or omitting proprioception."

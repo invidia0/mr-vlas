@@ -1,0 +1,75 @@
+title: "Chapter 14 — Check your understanding"
+questions:
+  - q: "Three robots each run the same single-robot VLA on the instruction 'go to the crate' in a scene with three crates. Why does the team often fail?"
+    type: single
+    options:
+      - text: "Each policy is local and has no model of its teammates, so nothing prevents several robots from choosing the same crate."
+        correct: true
+        why: "Independent local policies cannot coordinate without communication or allocation."
+      - text: "The VLA cannot follow kind-only instructions."
+        why: "It was trained on them; each robot does reach a crate."
+      - text: "The robots collide."
+        why: "Collisions can be prevented by separation constraints, and the team still fails."
+      - text: "Three robots exceed the VLA's batch size."
+        why: "Batching is irrelevant."
+    explain: "Putting several single-robot VLAs in one workspace does not make a team."
+
+  - q: "What does 'centralised training, decentralised execution' mean?"
+    type: single
+    options:
+      - text: "Training may use global information (all observations, global state); at run time each robot acts only on its local information."
+        correct: true
+        why: "This is the CTDE recipe of QMIX and MAPPO."
+      - text: "One robot trains and the others copy its weights at run time."
+        why: "That is weight sharing, not CTDE."
+      - text: "A central server runs every robot's policy at run time."
+        why: "That is centralised execution."
+      - text: "Robots train alone and communicate only at run time."
+        why: "The reverse emphasis."
+    explain: "Privileged information is a training aid, not a deployment requirement."
+
+  - q: "Which statements about the auction algorithm for task allocation are correct?"
+    type: multi
+    options:
+      - text: "It terminates with an assignment within Nε of optimal."
+        correct: true
+        why: "Bertsekas' guarantee."
+      - text: "Bids are small messages, so it lends itself to distributed implementation."
+        correct: true
+        why: "Each bid is (task, price, bidder)."
+      - text: "Over a lossy channel, bidding once can leave two robots believing they own the same task."
+        correct: true
+        why: "Lab 16 measures this; re-broadcasting claims fixes it at a message cost."
+      - text: "It is always identical to greedy assignment."
+        why: "Greedy can be suboptimal."
+    explain: "Allocation is where classical algorithms give team-level guarantees cheaply."
+
+  - q: "In a language-mediated team, an LLM writes the assignment {'ugv1': 'pick_crate', 'uav0': 'pick_crate'}. What should the system do?"
+    type: single
+    options:
+      - text: "Reject it in a verifier (task assigned twice; the UAV lacks a gripper), feed the errors back to the model or fall back to a classical allocator."
+        correct: true
+        why: "The LLM proposes; checks dispose."
+      - text: "Execute it; the LLM knows best."
+        why: "LLM outputs can be inconsistent or infeasible."
+      - text: "Execute only the first line."
+        why: "Arbitrary and still unverified."
+      - text: "Ask the UAV's VLA to pick the crate anyway."
+        why: "Capabilities are hard constraints."
+    explain: "Use language to state the problem and classical solvers and verifiers to solve and check it."
+
+  - q: "Why is coverage control (move to the weighted centroid of your Voronoi cell) a useful template for VLA teams?"
+    type: multi
+    options:
+      - text: "Each robot needs only information about its Voronoi neighbours, so it scales."
+        correct: true
+        why: "Local rules."
+      - text: "The team cost decreases monotonically to a locally optimal configuration."
+        correct: true
+        why: "A global guarantee from local rules."
+      - text: "A VLM can supply the importance density without changing the controller."
+        correct: true
+        why: "Semantics enter as φ."
+      - text: "It always finds the globally optimal configuration."
+        why: "Only local optima are guaranteed."
+    explain: "Foundation models fit best as providers of what matters to rules with guarantees."

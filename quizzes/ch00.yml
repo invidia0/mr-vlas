@@ -1,0 +1,191 @@
+title: "Chapter 0 — Check your understanding"
+questions:
+  - q: |
+      `X` has shape `(B, T, d) = (8, 8, 32)` and `b` has shape `(8, 32)`. You meant to add example $i$'s bias vector `b[i]` to every token of example $i$. What does `X + b` compute?
+    type: single
+    options:
+      - text: "It raises a shape error because `(8, 32)` does not match `(8, 8, 32)`."
+        why: "Broadcasting aligns from the right: `(8, 32)` is treated as `(1, 8, 32)`, which is compatible. No error — that is the danger."
+      - text: "It adds `b[i]` to every token of example $i$, as intended."
+        why: "That would need `b[:, None, :]`, shape `(8, 1, 32)`."
+      - text: "It adds `b[t]` to token $t$ of *every* example, silently."
+        correct: true
+        why: "`(8, 32)` broadcasts as `(1, T=8, d)`, so row $t$ of `b` is added at position $t$. Because $B = T$ the shapes happen to match."
+      - text: "It adds the mean of `b` over the batch to every token."
+        why: "Broadcasting never averages; it virtually repeats size-1 dimensions."
+    explain: "Broadcasting compares shapes from the last dimension backwards. Silent broadcasting bugs are common precisely when two dimensions happen to have the same size. Write shapes in comments and use explicit `unsqueeze`/`None` indexing."
+
+  - q: "Why must a multilayer perceptron contain non-linear activation functions?"
+    type: single
+    options:
+      - text: "Without them, gradients cannot be computed."
+        why: "Linear maps are perfectly differentiable; gradients exist."
+      - text: "Without them, any stack of affine layers equals a single affine layer."
+        correct: true
+        why: "$(\\mathbf{x}W_1+\\mathbf{b}_1)W_2+\\mathbf{b}_2 = \\mathbf{x}W' + \\mathbf{b}'$: depth adds nothing."
+      - text: "They normalise the outputs so that training is stable."
+        why: "That is the role of normalisation layers, not activations (ReLU is unbounded)."
+      - text: "They make the network convex, so gradient descent finds the global optimum."
+        why: "Non-linear networks are non-convex; activations are the *source* of non-convexity."
+    explain: "The non-linearity is what lets composition create new functions. A ReLU MLP is a piecewise-affine function whose number of linear regions can grow exponentially with depth."
+
+  - q: |
+      For an affine layer $Y = XW + \mathbf{b}$ with $X\in\mathbb{R}^{B\times d_\text{in}}$, $W\in\mathbb{R}^{d_\text{in}\times d_\text{out}}$ and upstream gradient $\bar Y = \partial\mathcal{L}/\partial Y$, which statements are correct?
+    type: multi
+    options:
+      - text: "$\\bar W = X^\\top \\bar Y$"
+        correct: true
+        why: "Shape $(d_\\text{in}\\times B)(B\\times d_\\text{out}) = d_\\text{in}\\times d_\\text{out}$, the shape of $W$."
+      - text: "$\\bar X = \\bar Y W^\\top$"
+        correct: true
+        why: "Shape $(B\\times d_\\text{out})(d_\\text{out}\\times d_\\text{in})$, the shape of $X$."
+      - text: "$\\bar W = \\bar Y X^\\top$"
+        why: "Shape $(B\\times d_\\text{out})(d_\\text{in}\\times B)$ does not even multiply unless $d_\\text{out}=d_\\text{in}$."
+      - text: "$\\bar{\\mathbf{b}}$ is the sum of the rows of $\\bar Y$ over the batch."
+        correct: true
+        why: "The bias is shared by every example, so its gradient accumulates over the batch."
+    explain: "Each gradient has the shape of the tensor it differentiates. Shared parameters (biases, weights, embedding rows) accumulate gradients from every place they are used."
+
+  - q: "Minimising mean-squared error for a regression network is equivalent to maximum likelihood under which model?"
+    type: single
+    options:
+      - text: "A Gaussian with the network output as mean and a fixed, isotropic variance."
+        correct: true
+        why: "$-\\log\\mathcal{N}(\\mathbf{y};f_\\theta(\\mathbf{x}),\\sigma^2I) = \\lVert\\mathbf{y}-f_\\theta(\\mathbf{x})\\rVert^2/2\\sigma^2 + \\text{const}$."
+      - text: "A Laplace distribution."
+        why: "Laplace NLL gives the $\\ell_1$ (absolute) error, whose minimiser is the conditional median."
+      - text: "A mixture of Gaussians."
+        why: "A mixture NLL is not a squared error; it can represent multiple modes, which MSE cannot."
+      - text: "A categorical distribution over discretised outputs."
+        why: "That gives cross-entropy."
+    explain: "MSE silently assumes a unimodal Gaussian. Its minimiser is the conditional mean, which is why it averages distinct valid solutions (elbow-up vs elbow-down) into an invalid one."
+
+  - q: |
+      A dataset of grasps contains, for the same image, 50% grasps on the left handle at $x=-0.1$ m and 50% on the right handle at $x=+0.1$ m. A policy trained with MSE predicts the grasp position. What does it converge to (with enough capacity), and what fixes it?
+    type: single
+    options:
+      - text: "$x\\approx0$ (the lid); use a model of the full distribution, e.g. a categorical over bins or a diffusion/flow head."
+        correct: true
+        why: "MSE's optimum is the conditional mean. A distributional head can put mass on both handles and commit to one when sampled."
+      - text: "$x\\approx-0.1$ because the first examples dominate; shuffle the data."
+        why: "Order does not change the optimum of an average loss."
+      - text: "It oscillates forever between $\\pm0.1$; lower the learning rate."
+        why: "The loss has a unique minimiser at the mean; there is no oscillation in the limit."
+      - text: "$x\\approx0$; add more data to fix it."
+        why: "More data from the same bimodal distribution only pins the mean more precisely."
+    explain: "This is the regression-to-the-mean failure of unimodal policies — the central motivation for the generative action heads of Chapter 6 and the discrete action tokens of Chapter 8."
+
+  - q: "You pass `probs = logits.softmax(-1)` into `F.cross_entropy(probs, target)`. What happens?"
+    type: single
+    options:
+      - text: "A runtime error, since cross_entropy rejects probabilities."
+        why: "It accepts any real tensor; it has no way to tell probabilities from logits."
+      - text: "Correct training, just slightly slower."
+        why: "The result is a different, wrong loss."
+      - text: "It trains a wrong objective: softmax is applied twice, the effective logits are squashed into $[0,1]$, and gradients become tiny."
+        correct: true
+        why: "`cross_entropy` applies `log_softmax` internally. Softmax of values in $[0,1]$ is nearly uniform, so learning is slow and the model can never become confident."
+      - text: "Nothing — softmax is idempotent."
+        why: "Softmax is not idempotent: $\\operatorname{softmax}(\\operatorname{softmax}(\\mathbf{z}))\\ne\\operatorname{softmax}(\\mathbf{z})$."
+    explain: "Always pass raw logits to `cross_entropy`. This bug is common because the loss still decreases."
+
+  - q: "Which statements about the forward KL divergence $D_\\text{KL}(p_\\text{data}\\Vert p_\\theta)$ are true?"
+    type: multi
+    options:
+      - text: "Minimising it over $\\theta$ is equivalent to maximum likelihood."
+        correct: true
+        why: "It equals $H(p_\\text{data},p_\\theta) - H(p_\\text{data})$, and the second term does not depend on $\\theta$."
+      - text: "It is mass-covering: $p_\\theta$ is penalised heavily for assigning near-zero probability where the data has mass."
+        correct: true
+        why: "The term $p\\log(p/q)$ blows up as $q\\to0$ where $p>0$."
+      - text: "It is symmetric in its two arguments."
+        why: "KL is not symmetric; reverse KL is mode-seeking."
+      - text: "It can be negative when the model is better than the data."
+        why: "KL is always $\\ge 0$ (Gibbs' inequality), with equality iff the distributions are equal."
+    explain: "Maximum likelihood = cross-entropy minimisation = forward-KL minimisation. Forward KL spreads probability over all modes of the data."
+
+  - q: "Byte-pair encoding training repeatedly…"
+    type: single
+    options:
+      - text: "…splits the least frequent word into two halves."
+        why: "BPE builds up from small units; it never splits words top-down."
+      - text: "…merges the most frequent adjacent pair of symbols into a new symbol and records the merge."
+        correct: true
+        why: "That is the whole algorithm. Encoding applies the recorded merges in order."
+      - text: "…clusters word embeddings and assigns one token per cluster."
+        why: "BPE is purely count-based and runs before any embedding exists."
+      - text: "…removes the tokens whose removal least reduces corpus likelihood."
+        why: "That is the Unigram LM tokenizer (SentencePiece), which prunes top-down."
+    explain: "BPE is a greedy compression algorithm. Its units reflect corpus statistics, which is why domain-specific words (site names, part numbers) cost many tokens."
+
+  - q: "An embedding layer `nn.Embedding(V, d)` applied to ids is mathematically equivalent to…"
+    type: single
+    options:
+      - text: "A linear layer without bias applied to one-hot vectors of length $V$."
+        correct: true
+        why: "$\\mathbf{e}_iE = E_{i,:}$. Indexing is just the efficient implementation."
+      - text: "A hash function from ids to random vectors that is not trained."
+        why: "The table is a learned parameter matrix updated by backpropagation."
+      - text: "A small MLP with a ReLU applied to the integer id."
+        why: "Ids are labels, not quantities; no MLP is applied to the integer."
+      - text: "A convolution over neighbouring token ids."
+        why: "Each token is embedded independently of its neighbours."
+    explain: "Because it is a linear layer on one-hot inputs, only the rows of tokens present in the batch receive gradient, and each occurrence adds its upstream gradient to its row."
+
+  - q: "Why did RNN-based sequence models train slowly on GPUs compared with transformers?"
+    type: single
+    options:
+      - text: "RNNs have more parameters."
+        why: "Not necessarily; an RNN can be small."
+      - text: "The hidden state $\\mathbf{h}_t$ depends on $\\mathbf{h}_{t-1}$, so the $T$ time steps must be computed sequentially even with teacher forcing."
+        correct: true
+        why: "Transformers compute all positions of a training sequence in parallel; RNNs cannot."
+      - text: "RNNs cannot use the softmax function."
+        why: "RNN language models use a softmax output just like transformers."
+      - text: "RNNs cannot be trained with backpropagation."
+        why: "They are trained with backpropagation through time."
+    explain: "Sequential dependence along time limits parallelism. Transformers trade it for $O(T^2)$ pairwise attention, which parallelises perfectly."
+
+  - q: |
+      In RNN training, $\partial\mathbf{h}_t/\partial\mathbf{h}_k$ is a product of $t-k$ Jacobians. What is the consequence, and which later architectural idea addresses the same problem in transformers?
+    type: single
+    options:
+      - text: "Gradients vanish or explode geometrically in $t-k$; additive paths (LSTM memory cells, residual connections) let gradients flow."
+        correct: true
+        why: "Like a state-transition matrix, the product shrinks or grows with its singular values. Additive identity paths keep the Jacobian close to identity."
+      - text: "Gradients are always exactly zero after 10 steps; transformers fix it with dropout."
+        why: "Nothing is exactly zero, and dropout is a regulariser, not a gradient-flow fix."
+      - text: "The gradient becomes symmetric; attention fixes it with the softmax."
+        why: "Symmetry is irrelevant here."
+      - text: "There is no consequence because tanh is bounded."
+        why: "Boundedness of tanh makes vanishing *more* likely (saturation), not less."
+    explain: "This is the same geometry as stability of linear time-varying systems. Residual connections in transformers serve the same purpose across depth that the LSTM cell serves across time."
+
+  - q: "A ViT with patch size $P=16$ processes a $224\\times224$ RGB image. How many image tokens, and what is the length of each flattened patch before projection?"
+    type: single
+    options:
+      - text: "196 tokens; each patch has 768 numbers."
+        correct: true
+        why: "$(224/16)^2 = 14^2 = 196$; $16\\cdot16\\cdot3 = 768$."
+      - text: "224 tokens; each patch has 256 numbers."
+        why: "That counts rows and ignores colour channels."
+      - text: "50,176 tokens; each patch has 3 numbers."
+        why: "That is one token per pixel, which would make attention cost $\\approx 2.5\\times10^9$ pairs."
+      - text: "14 tokens; each patch has 16 numbers."
+        why: "The grid is $14\\times14$, not 14, and a patch has $P^2\\cdot3$ values."
+    explain: "Tokens are the unit of cost. 196 tokens per image (more for higher resolution or several cameras) is a large part of a VLA's per-step compute."
+
+  - q: "Which statements about the role of language models inside VLAs are correct at this stage of the book?"
+    type: multi
+    options:
+      - text: "The pretrained LLM contributes semantic knowledge (objects, relations, task structure) learned from text."
+        correct: true
+        why: "This is the main reason to start from a pretrained VLM instead of training a policy from scratch."
+      - text: "Some VLAs emit actions as tokens from the LLM's own vocabulary."
+        correct: true
+        why: "RT-2 and OpenVLA discretise each action dimension into 256 bins mapped to token ids."
+      - text: "Next-token prediction guarantees that the robot will succeed at the task."
+        why: "Offline likelihood does not imply closed-loop success; errors compound when the policy visits unseen states."
+      - text: "All VLAs generate actions autoregressively, one token at a time."
+        why: "Many recent VLAs (π0, GR00T, SmolVLA) generate continuous action chunks with a flow-matching expert."
+    explain: "Keep two families in mind from now on: action-as-token (autoregressive, categorical) and action-as-continuous-chunk (diffusion/flow). Chapter 8 compares them formally."

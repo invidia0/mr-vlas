@@ -1,0 +1,223 @@
+site_name: "Vision-Language-Action Models: From First Principles to Multi-Robot Systems"
+site_description: A research-level interactive textbook on VLA models for robotics, UAVs and multi-robot systems.
+docs_dir: book/docs
+site_dir: site
+use_directory_urls: false   # site works when opened from disk as well as via `mkdocs serve`
+strict: true
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.tooltips
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle: {icon: material/weather-night, name: Dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle: {icon: material/weather-sunny, name: Light mode}
+
+hooks:
+  - book/hooks/quiz.py
+  - book/hooks/figures.py
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_javascript:
+  - assets/katex.js
+  - https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js
+  - https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js
+  - assets/quiz.js
+
+extra_css:
+  - https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css
+  - assets/extra.css
+
+nav:
+  - Home: index.md
+  - "Part I — Foundations":
+      - "0. Foundations":
+          - Overview: chapters/00-foundations/index.md
+          - "0.1 Tensors": chapters/00-foundations/tensors.md
+          - "0.2 Neural networks": chapters/00-foundations/neural-networks.md
+          - "0.3 Training": chapters/00-foundations/training.md
+          - "0.4 Probability": chapters/00-foundations/probability.md
+          - "0.5 Tokens": chapters/00-foundations/tokens.md
+          - "0.6 Embeddings": chapters/00-foundations/embeddings.md
+          - "0.7 Sequence models": chapters/00-foundations/sequence-models.md
+          - "0.8 First look": chapters/00-foundations/first-look.md
+          - "Review & quiz": chapters/00-foundations/review.md
+      - "1. Vision, language, multimodal":
+          - Overview: chapters/01-multimodal-intro/index.md
+          - "1.1 Language models": chapters/01-multimodal-intro/language.md
+          - "1.2 Images as data": chapters/01-multimodal-intro/vision.md
+          - "1.3 Combining modalities": chapters/01-multimodal-intro/combining.md
+          - "Review & quiz": chapters/01-multimodal-intro/review.md
+      - "2. Transformers in depth":
+          - Overview: chapters/02-transformers/index.md
+          - "2.1 Attention": chapters/02-transformers/attention.md
+          - "2.2 Multi-head & cross-attention": chapters/02-transformers/multi-head.md
+          - "2.3 Positions": chapters/02-transformers/positions.md
+          - "2.4 The transformer block": chapters/02-transformers/block.md
+          - "2.5 Training language models": chapters/02-transformers/training.md
+          - "2.6 Inference": chapters/02-transformers/inference.md
+          - "2.7 Scaling": chapters/02-transformers/scaling.md
+          - "Review & quiz": chapters/02-transformers/review.md
+  - "Part II — Seeing and reading":
+      - "3. Vision architectures":
+          - Overview: chapters/03-vision/index.md
+          - "3.1 Convolutional networks": chapters/03-vision/cnn.md
+          - "3.2 The Vision Transformer": chapters/03-vision/vit.md
+          - "3.3 Self-supervised encoders": chapters/03-vision/self-supervised.md
+          - "3.4 Encoders for VLAs": chapters/03-vision/encoders-for-vlas.md
+          - "Review & quiz": chapters/03-vision/review.md
+      - "4. Multimodal alignment":
+          - Overview: chapters/04-alignment/index.md
+          - "4.1 Contrastive learning": chapters/04-alignment/contrastive.md
+          - "4.2 CLIP and SigLIP": chapters/04-alignment/clip-siglip.md
+          - "4.3 Connectors": chapters/04-alignment/connectors.md
+          - "4.4 Grounding": chapters/04-alignment/grounding.md
+          - "4.5 Failure modes": chapters/04-alignment/failure-modes.md
+          - "Review & quiz": chapters/04-alignment/review.md
+      - "5. Vision-language models":
+          - Overview: chapters/05-vlms/index.md
+          - "5.1 The VLM recipe": chapters/05-vlms/recipe.md
+          - "5.2 Training VLMs": chapters/05-vlms/training.md
+          - "5.3 Small VLMs": chapters/05-vlms/small-vlms.md
+          - "5.4 Grounding, space, hallucination": chapters/05-vlms/spatial.md
+          - "5.5 From describing to acting": chapters/05-vlms/to-action.md
+          - "Review & quiz": chapters/05-vlms/review.md
+  - "Part III — Acting":
+      - "6. Generative models":
+          - Overview: chapters/06-generative/index.md
+          - "6.1 Regression to the mean": chapters/06-generative/multimodality.md
+          - "6.2 Mixtures and discretisation": chapters/06-generative/mdn-ar.md
+          - "6.3 VAEs and ACT's CVAE": chapters/06-generative/vae.md
+          - "6.4 Diffusion": chapters/06-generative/diffusion.md
+          - "6.5 Flow matching": chapters/06-generative/flow-matching.md
+          - "6.6 Sampling cost": chapters/06-generative/sampling-cost.md
+          - "Review & quiz": chapters/06-generative/review.md
+      - "7. Imitation & RL":
+          - Overview: chapters/07-decision-making/index.md
+          - "7.1 MDPs and POMDPs": chapters/07-decision-making/mdp.md
+          - "7.2 Behavioural cloning": chapters/07-decision-making/behavior-cloning.md
+          - "7.3 Covariate shift": chapters/07-decision-making/covariate-shift.md
+          - "7.4 DAgger": chapters/07-decision-making/dagger.md
+          - "7.5 Reinforcement learning": chapters/07-decision-making/rl.md
+          - "7.6 RL fine-tuning": chapters/07-decision-making/rl-finetuning.md
+          - "Review & quiz": chapters/07-decision-making/review.md
+      - "8. VLA models":
+          - Overview: chapters/08-vla/index.md
+          - "8.1 The VLA paradigm": chapters/08-vla/definition.md
+          - "8.2 Inputs": chapters/08-vla/inputs.md
+          - "8.3 Action spaces": chapters/08-vla/action-spaces.md
+          - "8.4 Action tokens": chapters/08-vla/action-tokens.md
+          - "8.5 Action experts": chapters/08-vla/action-experts.md
+          - "8.6 Chunking": chapters/08-vla/chunking.md
+          - "8.7 Closed loop": chapters/08-vla/closed-loop.md
+          - "Review & quiz": chapters/08-vla/review.md
+      - "9. Training VLAs":
+          - Overview: chapters/09-training/index.md
+          - "9.1 Training stages": chapters/09-training/stages.md
+          - "9.2 Demonstrations": chapters/09-training/demonstrations.md
+          - "9.3 Datasets": chapters/09-training/datasets.md
+          - "9.4 Fine-tuning": chapters/09-training/finetuning.md
+          - "9.5 Evaluation": chapters/09-training/evaluation.md
+          - "9.6 Data scaling": chapters/09-training/data-scaling.md
+          - "Review & quiz": chapters/09-training/review.md
+      - "10. Architectures in practice":
+          - Overview: chapters/10-case-studies/index.md
+          - "10.1 ACT and Diffusion Policy": chapters/10-case-studies/precursors.md
+          - "10.2 RT-1 and RT-2": chapters/10-case-studies/rt.md
+          - "10.3 Octo and OpenVLA": chapters/10-case-studies/octo-openvla.md
+          - "10.4 π0, FAST, π0.5": chapters/10-case-studies/pi0.md
+          - "10.5 GR00T N1 and SmolVLA": chapters/10-case-studies/groot-smolvla.md
+          - "Review & quiz": chapters/10-case-studies/review.md
+  - "Part IV — Deploying":
+      - "11. Deployment":
+          - Overview: chapters/11-deployment/index.md
+          - "11.1 Latency budgets": chapters/11-deployment/latency.md
+          - "11.2 Memory and quantisation": chapters/11-deployment/memory-quantization.md
+          - "11.3 Serving": chapters/11-deployment/serving.md
+          - "11.4 ROS 2 integration": chapters/11-deployment/ros2.md
+          - "11.5 Monitoring": chapters/11-deployment/monitoring.md
+          - "Review & quiz": chapters/11-deployment/review.md
+      - "12. Embodied AI":
+          - Overview: chapters/12-embodied/index.md
+          - "12.1 State and sensors": chapters/12-embodied/state-sensors.md
+          - "12.2 The control hierarchy": chapters/12-embodied/hierarchy.md
+          - "12.3 Learn or keep classical": chapters/12-embodied/learn-or-classical.md
+          - "12.4 Interfaces and safety filters": chapters/12-embodied/interfaces.md
+          - "Review & quiz": chapters/12-embodied/review.md
+      - "13. UAVs":
+          - Overview: chapters/13-uavs/index.md
+          - "13.1 The UAV stack": chapters/13-uavs/stack.md
+          - "13.2 PX4 offboard control": chapters/13-uavs/px4-offboard.md
+          - "13.3 Architectures": chapters/13-uavs/architectures.md
+          - "13.4 Direct action": chapters/13-uavs/direct-action.md
+          - "13.5 Safety architecture": chapters/13-uavs/safety.md
+          - "13.6 Testing": chapters/13-uavs/testing.md
+          - "Review & quiz": chapters/13-uavs/review.md
+  - "Part V — Research":
+      - "14. Multi-robot systems":
+          - Overview: chapters/14-multi-robot/index.md
+          - "14.1 Dec-POMDPs": chapters/14-multi-robot/dec-pomdp.md
+          - "14.2 Communication": chapters/14-multi-robot/communication.md
+          - "14.3 Language-mediated coordination": chapters/14-multi-robot/language-coordination.md
+          - "14.4 Task allocation": chapters/14-multi-robot/task-allocation.md
+          - "14.5 Coverage and scalability": chapters/14-multi-robot/coverage-scalability.md
+          - "14.6 Multi-robot data": chapters/14-multi-robot/data.md
+          - "Review & quiz": chapters/14-multi-robot/review.md
+      - "15. Research directions":
+          - Overview: chapters/15-research/index.md
+          - "15.1 Multi-robot VLAs": chapters/15-research/multi-robot.md
+          - "15.2 Aerial VLAs": chapters/15-research/uavs.md
+          - "15.3 Long horizons and generalisation": chapters/15-research/generalisation.md
+          - "15.4 Safety and uncertainty": chapters/15-research/safety-uncertainty.md
+          - "15.5 Real time and communication": chapters/15-research/realtime-communication.md
+          - "15.6 From question to paper": chapters/15-research/methodology.md
+          - "Review & quiz": chapters/15-research/review.md
+  - Appendices:
+      - "A. MuJoCo guide": appendix/mujoco.md
+      - "B. ROS 2 + PX4 SITL": appendix/ros2-px4.md
+      - "C. Notation": appendix/notation.md
+      - Glossary: glossary.md
+      - Reading list: papers.md

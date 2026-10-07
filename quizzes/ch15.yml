@@ -1,0 +1,61 @@
+title: "Chapter 15 — Check your understanding"
+questions:
+  - q: "You propose a teammate-aware VLA. Which baselines should your paper include?"
+    type: multi
+    options:
+      - text: "Independent per-robot VLAs (the method without the teammate input)."
+        correct: true
+        why: "The ablation that isolates the contribution."
+      - text: "A centralised classical allocator over per-robot VLAs."
+        correct: true
+        why: "A strong simple baseline that may well win."
+      - text: "Only prior learned multi-agent methods."
+        why: "Simple classical baselines are often stronger and must be included."
+      - text: "The same evaluation episodes for every method, with paired tests."
+        correct: true
+        why: "Paired evaluation reduces variance and makes comparisons fair."
+    explain: "Beat the strongest simple baseline on the same episodes, with intervals."
+
+  - q: "Which design does the evidence in this book favour for placing a VLA on a drone today?"
+    type: single
+    options:
+      - text: "The VLA proposes goals or waypoints; a planner, safety filter and PX4 fly; research then studies how to give the model more authority safely."
+        correct: true
+        why: "Lab 15: goal-level control was robust to latency and link loss."
+      - text: "The VLA outputs motor commands."
+        why: "Far below the rate and reliability needed."
+      - text: "The VLA replaces PX4."
+        why: "The flight controller owns stabilisation and failsafes."
+      - text: "No learned component should ever be on a drone."
+        why: "Goal-level semantic decisions are a good fit for VLAs."
+    explain: "Authority should grow only with the protections that make it safe."
+
+  - q: "What makes conformal prediction attractive for VLA uncertainty?"
+    type: single
+    options:
+      - text: "It gives distribution-free coverage guarantees from a calibration set, which can turn uncertainty into an 'ask for help' rule with a bounded error rate (as KnowNo did for LLM planners)."
+        correct: true
+        why: "Statistical guarantees without retraining the model."
+      - text: "It makes the model more accurate."
+        why: "It calibrates decisions; it does not change the model."
+      - text: "It requires no data."
+        why: "It needs a calibration set from the deployment distribution."
+      - text: "It works only for images."
+        why: "It is model- and modality-agnostic."
+    explain: "Calibration converts heuristics into guarantees, under exchangeability assumptions."
+
+  - q: "Lab 11's first policy reached its training targets but ignored the instruction. Which practice would have caught this before deployment?"
+    type: multi
+    options:
+      - text: "Evaluating on held-out scenes with several instructions per scene."
+        correct: true
+        why: "Breaks the scene-to-target shortcut."
+      - text: "Checking whether actions change when only the instruction changes."
+        correct: true
+        why: "A direct probe of language conditioning."
+      - text: "Reporting only training loss."
+        why: "Training loss was low."
+      - text: "A failure analysis that classifies where failed episodes end."
+        correct: true
+        why: "Most failures ended at the wrong object."
+    explain: "Shortcut learning passes every check that does not test the intended dependency."

@@ -1,0 +1,52 @@
+/* ---------- Custom admonitions: definition, robotics, lab ---------- */
+:root {
+  --md-admonition-icon--definition: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 2H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2m-1 18H6V4h12zM8 6h8v2H8zm0 4h8v2H8zm0 4h5v2H8z"/></svg>');
+  --md-admonition-icon--robot: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5 2.5 2.5 0 0 0-2.5-2.5"/></svg>');
+  --md-admonition-icon--lab: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 2v2h1v14a4 4 0 0 0 4 4 4 4 0 0 0 4-4V4h1V2zm4 14c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1m2-4c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1m1-5h-4V4h4z"/></svg>');
+}
+.md-typeset .admonition.definition, .md-typeset details.definition { border-color: #5c6bc0; }
+.md-typeset .definition > .admonition-title, .md-typeset .definition > summary { background-color: #5c6bc01a; }
+.md-typeset .definition > .admonition-title::before, .md-typeset .definition > summary::before {
+  background-color: #5c6bc0; -webkit-mask-image: var(--md-admonition-icon--definition); mask-image: var(--md-admonition-icon--definition);
+}
+.md-typeset .admonition.robot, .md-typeset details.robot { border-color: #00897b; }
+.md-typeset .robot > .admonition-title, .md-typeset .robot > summary { background-color: #00897b1a; }
+.md-typeset .robot > .admonition-title::before, .md-typeset .robot > summary::before {
+  background-color: #00897b; -webkit-mask-image: var(--md-admonition-icon--robot); mask-image: var(--md-admonition-icon--robot);
+}
+.md-typeset .admonition.lab, .md-typeset details.lab { border-color: #ef6c00; }
+.md-typeset .lab > .admonition-title, .md-typeset .lab > summary { background-color: #ef6c001a; }
+.md-typeset .lab > .admonition-title::before, .md-typeset .lab > summary::before {
+  background-color: #ef6c00; -webkit-mask-image: var(--md-admonition-icon--lab); mask-image: var(--md-admonition-icon--lab);
+}
+
+/* Display math can be wide: scroll it instead of overflowing the page. */
+.md-typeset .arithmatex { overflow-x: auto; }
+
+/* ---------- Quizzes ---------- */
+.quiz { border-top: 2px solid var(--md-primary-fg-color); margin-top: 2rem; padding-top: .5rem; }
+.quiz-q { border: 1px solid var(--md-default-fg-color--lightest); border-radius: 6px; padding: .2rem 1rem .6rem; margin: 1rem 0; }
+.quiz-opt {
+  border: 1px solid var(--md-default-fg-color--lighter); border-radius: 4px;
+  padding: .1rem .8rem; margin: .4rem 0; cursor: pointer;
+}
+.quiz-opt > p { margin: .4em 0; }
+.quiz-opt:hover, .quiz-opt:focus { border-color: var(--md-accent-fg-color); outline: none; }
+.quiz-opt.chosen { border-width: 2px; border-color: var(--md-primary-fg-color); }
+.quiz-opt.graded { cursor: default; }
+.quiz-opt.is-correct { background: #2e7d3222; border-color: #2e7d32; }
+.quiz-opt.chosen.is-wrong { background: #c6282822; border-color: #c62828; }
+.quiz-opt.is-correct::before { content: "✓ correct"; float: right; color: #2e7d32; font-size: .7rem; margin-top: .5em; }
+.quiz-opt.chosen.is-wrong::before { content: "✗ your choice"; float: right; color: #c62828; font-size: .7rem; margin-top: .5em; }
+.quiz-why, .quiz-explain { display: none; }
+.quiz-opt.graded .quiz-why { display: block; font-size: .85em; opacity: .85; border-left: 3px solid var(--md-default-fg-color--lighter); padding-left: .6rem; margin-bottom: .5rem; }
+.quiz-q.answered .quiz-explain { display: block; }
+.quiz-bar { display: flex; gap: .6rem; align-items: center; margin: .6rem 0; }
+.quiz-bar .md-button { padding: .2em 1em; font-size: .75rem; }
+.quiz-q.right .quiz-status { color: #2e7d32; }
+.quiz-q.wrong .quiz-status { color: #c62828; }
+
+/* ---------- Figures (scripts/make_figures.py) ---------- */
+.md-typeset figure { margin: 1.6em auto; }
+.md-typeset figure img { max-width: 100%; height: auto; }
+.md-typeset figcaption { max-width: 42rem; font-size: .72rem; text-align: left; }

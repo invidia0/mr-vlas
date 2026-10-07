@@ -1,0 +1,104 @@
+title: "Chapter 7 — Check your understanding"
+questions:
+  - q: "A VLA's policy is $\\pi_\\theta(\\mathbf{A}_t\\mid\\mathbf{o}_t,\\ell)$ with a single current frame. Which tasks are fundamentally hard for it?"
+    type: multi
+    options:
+      - text: "Return to where a toolbox was seen before it left the camera's view."
+        correct: true
+        why: "The needed information is in the history, not in $\\mathbf{o}_t$: a POMDP with memory."
+      - text: "Move three of five crates, one at a time."
+        correct: true
+        why: "Progress (how many are done) may not be visible in one frame."
+      - text: "Grasp the red toolbox in front of the camera."
+        why: "The current frame contains what is needed."
+      - text: "Pick up a crate, given a top-down image that shows it."
+        why: "Markov in the observation is sufficient here."
+    explain: "Markov VLAs are POMDP policies without memory; tasks requiring memory need history tokens, external state or a planner."
+
+  - q: "Lab 10's behaviour-cloned policy reaches a training MSE of $4\\times10^{-5}$ yet drifts to a path error ten times the expert's. What is the best explanation?"
+    type: single
+    options:
+      - text: "It was trained only on states near the route; small errors take it to states it never saw, where its actions do not correct the error, and the error compounds."
+        correct: true
+        why: "Covariate shift: training on $d_{\\pi^\\ast}$, deploying on $d_{\\pi_\\theta}$."
+      - text: "The network is too small to represent the expert."
+        why: "Its training loss is tiny; the issue is where it was trained."
+      - text: "The expert itself is unstable."
+        why: "The expert keeps the error at 0.005."
+      - text: "MSE is the wrong loss because the expert is multimodal."
+        why: "This expert is deterministic; MSE is correct here."
+    explain: "Low offline loss does not imply closed-loop success — the defining difficulty of imitation learning."
+
+  - q: "Why did fifty demonstrations not improve on five in Lab 10, while DAgger with 6000 labels (fewer than 50 demos' 10 000) did?"
+    type: single
+    options:
+      - text: "More demonstrations from the same start distribution in calm air add more of the *same* states; DAgger adds labels on the states the learner actually visits."
+        correct: true
+        why: "Coverage of the learner's distribution, not quantity, is what matters."
+      - text: "DAgger uses a larger network."
+        why: "Same network."
+      - text: "DAgger's expert is better."
+        why: "Same expert."
+      - text: "Fifty demos overfit."
+        why: "Training and test errors on expert states are both tiny; the failure is off-distribution."
+    explain: "Data strategy beats data volume when the distribution is wrong — a lesson that scales to VLA datasets (Chapter 9)."
+
+  - q: "What does the compounding-error bound $J(\\pi_\\theta)\\le J(\\pi^\\ast)+T^2\\epsilon$ assume and say?"
+    type: multi
+    options:
+      - text: "$\\epsilon$ is the learner's error rate on the expert's state distribution."
+        correct: true
+        why: "That is what BC minimises."
+      - text: "Once off the expert's distribution, the learner may pay the maximum cost per step for the rest of the episode."
+        correct: true
+        why: "Worst case: nothing constrains it there."
+      - text: "It guarantees BC fails on every task with long horizons."
+        why: "It is a worst-case upper bound; many tasks are forgiving."
+      - text: "DAgger improves it to roughly linear in $T$."
+        correct: true
+        why: "No-regret online learning on the aggregated distribution."
+    explain: "The extra factor $T$ is the price of the feedback loop: errors change future inputs."
+
+  - q: "The REINFORCE gradient is $\\mathbb{E}[\\sum_t\\nabla\\log\\pi_\\theta(\\mathbf{a}_t\\mid\\mathbf{s}_t)\\hat A_t]$. Why does it not need a model of the dynamics?"
+    type: single
+    options:
+      - text: "In $\\nabla\\log p_\\theta(\\tau)$ the dynamics terms $\\log P(\\mathbf{s}_{t+1}\\mid\\mathbf{s}_t,\\mathbf{a}_t)$ do not depend on $\\theta$, so their gradients vanish."
+        correct: true
+        why: "The log-derivative trick leaves only the policy's log-probabilities."
+      - text: "Because the dynamics are deterministic."
+        why: "It works for stochastic dynamics too."
+      - text: "Because it differentiates through the simulator."
+        why: "That would require a differentiable model; REINFORCE does not."
+      - text: "Because the advantage contains the dynamics."
+        why: "The advantage is estimated from sampled returns, not computed from a model."
+    explain: "Model-free gradients are what make RL applicable to real robots and black-box simulators — at the cost of variance."
+
+  - q: "Why does RL fine-tuning of a VLA usually include a KL penalty to the behaviour-cloned policy?"
+    type: multi
+    options:
+      - text: "To limit reward hacking: the reward is imperfect and an unconstrained policy exploits it."
+        correct: true
+        why: "Staying near the reference keeps behaviour sensible where the reward is wrong."
+      - text: "To preserve the knowledge and generality learned in pretraining."
+        correct: true
+        why: "Large departures forget what the reward does not measure."
+      - text: "To keep exploration in a region where the policy is competent and safe."
+        correct: true
+        why: "Especially important on real hardware."
+      - text: "Because the KL term makes the policy gradient unbiased."
+        why: "It changes the objective; it is not a variance or bias correction."
+    explain: "The closed form $\\pi^\\star\\propto\\pi_\\text{ref}\\exp(A/\\beta)$ shows the anchor directly: reweight the reference, more sharply as $\\beta$ shrinks."
+
+  - q: "In Lab 10, REINFORCE improves a 4-parameter residual but degrades a 4,226-parameter residual network with the same rollouts. What does this illustrate for VLAs?"
+    type: single
+    options:
+      - text: "Policy-gradient variance grows with the number of parameters it must estimate, so RL fine-tuning of large policies touches few parameters (heads, residuals, adapters) or uses low-variance reweighting methods."
+        correct: true
+        why: "Sample complexity scales with the effective dimensionality of the update."
+      - text: "Neural networks cannot represent feedback gains."
+        why: "They can; BC + DAgger learns one. The issue is the gradient estimate, not representation."
+      - text: "The residual network had the wrong initialisation."
+        why: "It was zero-initialised so that it started exactly at the BC policy."
+      - text: "RL never works with neural networks."
+        why: "It works with enough samples (simulation); the budget here was deliberately small."
+    explain: "Choose what to fine-tune with RL as carefully as how."

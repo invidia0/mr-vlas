@@ -1,0 +1,75 @@
+title: "Chapter 11 — Check your understanding"
+questions:
+  - q: "A VLA's latency has mean 60 ms and p99 220 ms. With synchronous chunked execution at 20 Hz, which execution horizon $H_e$ should the budget be designed for?"
+    type: single
+    options:
+      - text: "At least 5 actions (≥ 220 ms / 50 ms), because the deadline must hold at the tail, not the mean."
+        correct: true
+        why: "$H_e\\Delta t\\ge t_\\text{p99}$; with $\\Delta t=50$ ms that is $H_e\\ge5$."
+      - text: "2 actions, because the mean is 60 ms."
+        why: "The controller would starve a few times per minute."
+      - text: "1 action; latency does not matter with chunking."
+        why: "Chunking only helps if the chunk covers the inference time."
+      - text: "Any; the watchdog handles misses."
+        why: "The watchdog is for rare failures, not for a budget designed to fail."
+    explain: "Design for the p99 and let the watchdog handle the rare remainder."
+
+  - q: "Which statements about weight quantisation for VLAs are correct?"
+    type: multi
+    options:
+      - text: "Halving bytes per weight roughly halves bandwidth-bound decode or expert time, if efficient low-bit kernels are used."
+        correct: true
+        why: "The time is set by bytes read; without fused kernels dequantisation can eat the gain."
+      - text: "Quantised policies must be validated in closed loop, especially on precision-critical tasks."
+        correct: true
+        why: "Small changes in actions can matter at the precision limit."
+      - text: "Calibration data for GPTQ/AWQ should come from robot observations rather than web text."
+        correct: true
+        why: "Activation statistics differ across domains."
+      - text: "int4 quantisation always speeds up inference."
+        why: "OpenVLA found 8-bit slower than bf16 in its setup; speed depends on kernels."
+    explain: "Bits decide memory; kernels decide speed; closed-loop tests decide acceptability."
+
+  - q: "Why can one GPU serve several robots almost as fast as one?"
+    type: single
+    options:
+      - text: "Batch-1 decoding is memory-bandwidth-bound: reading the weights once and applying them to several requests costs little more until compute becomes the limit."
+        correct: true
+        why: "Arithmetic intensity grows with batch size (book 2.6)."
+      - text: "Because the robots share the same observations."
+        why: "Their observations differ."
+      - text: "Because ROS 2 merges the requests."
+        why: "Batching is done by the server."
+      - text: "Because each robot gets a smaller model."
+        why: "They share one model."
+    explain: "Batching trades queueing delay for throughput; deadline-aware scheduling keeps the delay safe."
+
+  - q: "In the ROS 2 VLA node design of Section 11.4, which practices are recommended?"
+    type: multi
+    options:
+      - text: "Run inference in its own callback group or thread so that control and watchdog callbacks are never blocked."
+        correct: true
+        why: "The control path must not wait for the GPU."
+      - text: "Publish action chunks with the timestamp of the observation they were computed from."
+        correct: true
+        why: "Downstream code can align them to time and reject stale ones."
+      - text: "Let a separate safety node own the command stream to the controllers."
+        correct: true
+        why: "The VLA proposes; the safety layer disposes."
+      - text: "Subscribe to camera images with RELIABLE QoS and a deep queue to avoid losing frames."
+        why: "Deep reliable queues deliver old frames; sensor data should be best-effort and shallow."
+    explain: "Most integration failures are timing and authority mistakes, not model errors."
+
+  - q: "A flow-matching VLA produces 8 sampled chunks for the same observation, and they disagree strongly in a task that was unimodal in training. What is the best interpretation?"
+    type: single
+    options:
+      - text: "A warning sign of uncertainty or an out-of-distribution situation, which should trigger a cautious response — after its threshold has been calibrated on deployment data."
+        correct: true
+        why: "Disagreement is a cheap, uncalibrated uncertainty signal."
+      - text: "Proof that the robot will fail."
+        why: "It is a heuristic signal, not a calibrated probability."
+      - text: "A bug in the sampler."
+        why: "Sampling different noise is expected to give different chunks."
+      - text: "Nothing: sample spread is always meaningless."
+        why: "Sustained unexpected spread is informative."
+    explain: "Monitors feed a supervisor that escalates; the safety filter stays authoritative."

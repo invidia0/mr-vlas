@@ -1,0 +1,77 @@
+title: "Chapter 12 — Check your understanding"
+questions:
+  - q: "A VLA runs at 5 Hz on a mobile robot. Which signals should it receive?"
+    type: multi
+    options:
+      - text: "Camera images of the scene."
+        correct: true
+        why: "Its main input."
+      - text: "The estimated pose and velocity from the state estimator, normalised."
+        correct: true
+        why: "Compact, fused state at a rate the policy can use."
+      - text: "Raw 1 kHz IMU samples, so that it can estimate velocity itself."
+        why: "The policy cannot use kilohertz data at 5 Hz; a filter does this better and verifiably."
+      - text: "Context the cameras cannot see, such as the task phase or a goal from the map, possibly as language."
+        correct: true
+        why: "Slow, symbolic context is a natural extra input."
+    explain: "Give the VLA what only it can use; leave fast physical state to estimators."
+
+  - q: "Why is a VLA commanding end-effector targets at 10 Hz over a 1 kHz impedance controller a sound design, while a VLA commanding quadrotor rotor speeds is not?"
+    type: single
+    options:
+      - text: "Rate separation: the arm's controller reaches each target well within the policy period and keeps the arm stable; a quadrotor's attitude must be stabilised hundreds of times per second, far faster than a VLA can run, and failures are unrecoverable."
+        correct: true
+        why: "Each layer must be much faster than the one above it."
+      - text: "Quadrotors cannot carry cameras."
+        why: "They can."
+      - text: "Rotor speeds cannot be tokenised."
+        why: "They can; the problem is rate and stability, not representation."
+      - text: "Impedance controllers are learned."
+        why: "They are classical."
+    explain: "A VLA inherits the rate and responsibilities of the layer it replaces."
+
+  - q: "Which components are usually best kept classical in a VLA-based robot?"
+    type: multi
+    options:
+      - text: "Low-level joint or attitude control."
+        correct: true
+        why: "Fast, well-modelled, safety-critical."
+      - text: "Geofences, limits and emergency stops."
+        correct: true
+        why: "Must be verifiable and run every cycle."
+      - text: "Recognising which object the instruction refers to."
+        why: "Hard to model by hand, slow, recoverable: a natural thing to learn."
+      - text: "State estimation from IMU and odometry."
+        correct: true
+        why: "Good models exist; learned parts can live inside the filter."
+    explain: "Learn the semantic, keep the physical and the safety-critical."
+
+  - q: "A CBF filter with $h(\\mathbf{x})=\\lVert\\mathbf{x}-\\mathbf{c}\\rVert^2-r^2$ receives a velocity proposal pointing diagonally towards a keep-out zone. What does it output near the boundary?"
+    type: single
+    options:
+      - text: "The proposal with its component towards the zone reduced just enough to satisfy $\\dot h\\ge-\\alpha h$; the tangential component is kept, so the robot slides along the boundary."
+        correct: true
+        why: "It is a minimal-norm projection onto a half-space."
+      - text: "Zero velocity: the robot always stops near zones."
+        why: "Only when the proposal points straight at the centre (deadlock)."
+      - text: "A velocity pointing away from the goal."
+        why: "It changes the proposal minimally, not arbitrarily."
+      - text: "The proposal unchanged; CBFs only log violations."
+        why: "CBFs modify commands."
+    explain: "Minimal intervention is what lets a filter coexist with a capable policy."
+
+  - q: "What can a safety filter NOT guarantee?"
+    type: multi
+    options:
+      - text: "That the VLA chose the right object."
+        correct: true
+        why: "Task correctness is outside the constraints."
+      - text: "Avoidance of obstacles that are in neither its map nor its sensor feed."
+        correct: true
+        why: "It can only enforce constraints it knows."
+      - text: "That the task is completed (no deadlock)."
+        correct: true
+        why: "CBFs are myopic."
+      - text: "That the commanded speed stays below a configured limit."
+        why: "That is exactly what saturation guarantees."
+    explain: "Filters enforce written constraints; monitoring and planning handle the rest."

@@ -1,0 +1,101 @@
+title: "Chapter 6 — Check your understanding"
+questions:
+  - q: "Demonstrations at an observation go left, $\\mathbf{a}=(-0.6,0.4)$, or right, $(0.6,0.9)$, with probability 1/2 each. What does a perfectly trained MSE policy output?"
+    type: single
+    options:
+      - text: "$(0,\\ 0.65)$: the conditional mean, which no demonstrator ever took."
+        correct: true
+        why: "MSE is minimised by $\\mathbb{E}[\\mathbf{a}\\mid\\mathbf{o}]$."
+      - text: "Either mode, chosen at random."
+        why: "A deterministic regressor cannot choose; it outputs one value."
+      - text: "The more frequent mode."
+        why: "That would be the mode-seeking behaviour of a different objective; MSE averages."
+      - text: "It does not converge."
+        why: "It converges, to the mean."
+    explain: "This is a property of the optimum, not of optimisation or capacity — and the motivation for every generative action head."
+
+  - q: "Lab 09's independent-bins model gives 51% invalid samples while the autoregressive-bins model gives 1%. Why?"
+    type: single
+    options:
+      - text: "Independent heads sample each dimension's marginal separately, so lateral and forward values can come from different modes; conditioning the second token on the first keeps them coherent."
+        correct: true
+        why: "The joint distribution needs the coupling $p(k_2\\mid k_1)$."
+      - text: "The autoregressive model has more bins."
+        why: "Both use 32 bins per dimension."
+      - text: "Independent bins cannot represent bimodal marginals."
+        why: "Each marginal is represented fine; the coupling between them is missing."
+      - text: "Quantisation error is larger without autoregression."
+        why: "Quantisation is identical; the error is mixing modes."
+    explain: "This is why a language model emitting a 7-D action generates it token by token rather than all at once with independent heads."
+
+  - q: "Which statements about the ELBO and the CVAE are correct?"
+    type: multi
+    options:
+      - text: "$\\log p(\\mathbf{a})=\\mathrm{ELBO}+D_\\mathrm{KL}(q(\\mathbf{z})\\Vert p(\\mathbf{z}\\mid\\mathbf{a}))$, so the ELBO is a lower bound, tight when $q$ is the true posterior."
+        correct: true
+        why: "Standard decomposition; the KL is non-negative."
+      - text: "The reparameterisation $\\mathbf{z}=\\boldsymbol\\mu+\\boldsymbol\\sigma\\odot\\boldsymbol\\epsilon$ lets gradients flow into the encoder through a sample."
+        correct: true
+        why: "The randomness moves into $\\boldsymbol\\epsilon$, which does not depend on the parameters."
+      - text: "If the KL term goes to zero during training, the latent carries no information and the decoder regresses the mean again."
+        correct: true
+        why: "Posterior collapse; Lab 09 observes it at β = 1 and β = 10."
+      - text: "At test time ACT samples $\\mathbf{z}$ from the encoder."
+        why: "The encoder needs the demonstrated action, unavailable at test time; ACT uses $\\mathbf{z}=\\mathbf{0}$."
+    explain: "Monitor the KL term whenever you train a VAE-style policy."
+
+  - q: "In DDPM, the network is trained to predict the noise $\\boldsymbol\\epsilon$ in $\\mathbf{x}_k=\\sqrt{\\bar\\alpha_k}\\mathbf{x}_0+\\sqrt{1-\\bar\\alpha_k}\\boldsymbol\\epsilon$. What does the optimal predictor estimate?"
+    type: single
+    options:
+      - text: "A scaled score of the noised data distribution: $\\boldsymbol\\epsilon^\\ast=-\\sqrt{1-\\bar\\alpha_k}\\,\\nabla_\\mathbf{x}\\log p_k(\\mathbf{x})$."
+        correct: true
+        why: "Denoising score matching: averaging the per-example score over the data gives the marginal score."
+      - text: "The clean action $\\mathbf{x}_0$ directly."
+        why: "That is a different (equivalent) parameterisation, not the one trained here."
+      - text: "The mean action $\\mathbb{E}[\\mathbf{a}\\mid\\mathbf{o}]$."
+        why: "That is the MSE regression target; diffusion's target changes with the noise level and points to the nearest mode at low noise."
+      - text: "A random direction."
+        why: "It is deterministic given $\\mathbf{x}_k$ and $k$."
+    explain: "The score points toward higher density — toward a mode, never toward the gap between modes."
+
+  - q: "Conditional flow matching regresses $\\mathbf{v}_\\theta(\\mathbf{x}_\\tau,\\tau)$ onto $\\mathbf{x}_1-\\mathbf{x}_0$. At a given $(\\mathbf{x},\\tau)$ many training lines with different velocities pass through. Why is regression to their *average* not a problem here, unlike in Section 6.1?"
+    type: single
+    options:
+      - text: "The averaged velocity field is the marginal flow; integrating it transports the noise distribution to the data distribution, so endpoints land in the modes even though velocities were averaged."
+        correct: true
+        why: "The continuity equation holds for the marginal velocity $\\mathbb{E}[\\mathbf{x}_1-\\mathbf{x}_0\\mid\\mathbf{x}_\\tau=\\mathbf{x}]$."
+      - text: "Because the lines never cross."
+        why: "They do cross; that is why the network must average."
+      - text: "Because flow matching uses cross-entropy."
+        why: "It uses MSE."
+      - text: "Because only one Euler step is taken."
+        why: "One step from noise gives the average endpoint — exactly regression; Lab 09 measures 100% invalid."
+    explain: "Averaging is harmful when the *output* is the average; it is harmless when the average is a velocity that an ODE integrates."
+
+  - q: "Lab 09: flow matching with 1 Euler step gives 100% invalid samples, with 10 steps 8%. What explains the 1-step failure?"
+    type: single
+    options:
+      - text: "From noise at τ = 0 the learned velocity is the average direction toward the data mean, so one full step lands on the mean — between the modes."
+        correct: true
+        why: "At τ = 0 the endpoint is unknown; the field averages over all of them."
+      - text: "The network is undertrained."
+        why: "The same network gives 4% invalid with 50 steps."
+      - text: "Euler integration diverges."
+        why: "It does not diverge; it is simply too coarse to follow the bend toward a mode."
+      - text: "The noise sample was degenerate."
+        why: "This happens for all noise samples."
+    explain: "Few-step sampling needs straighter flows (reflow) or distillation (consistency models); fewer steps is never free."
+
+  - q: "A VLA has a 60 ms backbone pass. Option A: token-based, 7 action tokens, each a 60 ms decode pass of the same backbone. Option B: flow matching with a 5 ms action expert and 10 steps. Which is faster per action chunk, and why?"
+    type: single
+    options:
+      - text: "B (≈110 ms vs ≈480 ms for A): its sequential steps run a small expert, while A's sequential steps run the full backbone."
+        correct: true
+        why: "A: 60 + 7×60 = 480 ms; B: 60 + 10×5 = 110 ms."
+      - text: "A, because it needs fewer sequential steps (7 vs 10)."
+        why: "Count cost per step, not steps."
+      - text: "They are equal because both use one backbone pass."
+        why: "A uses eight backbone passes."
+      - text: "B, because flow matching does not need the backbone."
+        why: "It conditions on the backbone's features, computed once."
+    explain: "This asymmetry is the main reason recent VLAs attach a separate action expert to the backbone."

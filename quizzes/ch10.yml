@@ -1,0 +1,87 @@
+title: "Chapter 10 — Check your understanding"
+questions:
+  - q: "Which idea did each precursor contribute that modern VLAs still use?"
+    type: multi
+    options:
+      - text: "ACT: predicting long chunks of actions and ensembling overlapping chunks."
+        correct: true
+        why: "Chunking is in every modern VLA."
+      - text: "Diffusion Policy: modelling action chunks with a conditional generative model."
+        correct: true
+        why: "The ancestor of flow and diffusion action experts."
+      - text: "ACT: web-scale vision-language pretraining."
+        why: "ACT trains from scratch on a few demonstrations."
+      - text: "RT-1: discretising actions into 256 bins and predicting them as tokens."
+        correct: true
+        why: "RT-2 and OpenVLA kept this interface."
+    explain: "VLAs combine precursors' control ideas with VLM backbones."
+
+  - q: "RT-2 succeeded on 'pick up the extinct animal' (a toy dinosaur) but did not learn motions absent from its robot data. Why?"
+    type: single
+    options:
+      - text: "Web pretraining supplies semantics (what an extinct animal is), while motions come only from robot demonstrations; recombining known motions with new semantics generalises, inventing new motions does not."
+        correct: true
+        why: "The action distribution is learned from robot data alone."
+      - text: "The 256-bin discretisation is too coarse for new motions."
+        why: "Resolution is not the limitation; data coverage is."
+      - text: "It ran in the cloud."
+        why: "Deployment location does not affect what was learned."
+      - text: "The VLM was frozen."
+        why: "RT-2 fine-tuned the VLM (co-fine-tuning)."
+    explain: "Semantic generalisation and motor generalisation have different data sources."
+
+  - q: "OpenVLA-OFT replaced autoregressive action tokens with parallel decoding and an L1 regression head. What did it gain and what did it give up?"
+    type: single
+    options:
+      - text: "Gained much faster, chunked action generation; gave up the categorical head's ability to represent multimodal actions."
+        correct: true
+        why: "L1 regression predicts a per-dimension median."
+      - text: "Gained multimodality; gave up speed."
+        why: "The reverse."
+      - text: "Gained web knowledge; gave up language."
+        why: "The backbone is unchanged."
+      - text: "Nothing: it is equivalent to OpenVLA."
+        why: "Its outputs and costs differ fundamentally."
+    explain: "Good when demonstrations are consistent; risky with genuinely multimodal tasks (Chapter 6)."
+
+  - q: "What makes π0's ten denoising steps cheap relative to its 3 B backbone?"
+    type: single
+    options:
+      - text: "The block-wise mask lets the prefix's keys/values be cached; each step runs only the ~50 action tokens through the 300 M expert weights."
+        correct: true
+        why: "The prefix never attends to actions, so it is independent of the noisy chunk."
+      - text: "It uses one denoising step."
+        why: "It uses ten."
+      - text: "The backbone is quantised to 1 bit."
+        why: "No such quantisation."
+      - text: "The expert runs on a separate GPU."
+        why: "Placement is irrelevant to the FLOP count."
+    explain: "Backbone once, small expert N times — the action-expert cost structure."
+
+  - q: "Which system is the realistic starting point for fine-tuning on a single consumer GPU and deploying on an edge computer?"
+    type: single
+    options:
+      - text: "SmolVLA (~0.45 B), designed with 64 image tokens per camera, a truncated backbone and asynchronous inference."
+        correct: true
+        why: "Its design goal is exactly this setting."
+      - text: "RT-2-55B."
+        why: "Closed and cloud-scale."
+      - text: "OpenVLA without quantisation on a 6 GB GPU."
+        why: "7.5 B parameters in bf16 need ~15 GB."
+      - text: "GR00T N1 on a microcontroller."
+        why: "About 2 B parameters."
+    explain: "For research on your own robots, model size in bytes is the first constraint (Chapter 11)."
+
+  - q: "π0.5's generalisation to unseen homes was attributed mainly to…"
+    type: single
+    options:
+      - text: "…heterogeneous co-training: other robots' data, web data and high-level subtask annotations alongside the target robots' demonstrations."
+        correct: true
+        why: "Ablations removing parts of the mixture hurt held-out generalisation."
+      - text: "…a much larger backbone than π0."
+        why: "The backbone scale is similar."
+      - text: "…removing the action expert."
+        why: "It keeps the flow expert."
+      - text: "…training only in simulation."
+        why: "It uses real data from many homes."
+    explain: "Data composition, not only architecture, decides generalisation (Chapter 9)."

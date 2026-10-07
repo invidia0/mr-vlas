@@ -1,0 +1,100 @@
+title: "Chapter 5 — Check your understanding"
+questions:
+  - q: "LLaVA-1.5 uses CLIP ViT-L/14 at 336 px and a 2-layer MLP projector into a 7 B LM with $d=4096$. How many image tokens does the LM process per image, and what shape do they have?"
+    type: single
+    options:
+      - text: "576 tokens, shape `(576, 4096)`."
+        correct: true
+        why: "$(336/14)^2=24^2=576$ patches, [CLS] dropped, each projected to the LM width."
+      - text: "577 tokens, because the [CLS] token is kept."
+        why: "LLaVA drops [CLS] and uses patch features from the penultimate layer."
+      - text: "1 token: the pooled image embedding."
+        why: "That would lose all spatial information; VLMs keep one token per patch (or per group of patches)."
+      - text: "576 tokens of width 1024."
+        why: "1024 is the ViT width; the projector maps to the LM width."
+    explain: "Image tokens dominate the prefill cost of a VLM — and of a VLA built on it."
+
+  - q: "In stage 1 of LLaVA (alignment) the vision encoder and LM are frozen and only the projector is trained on image–caption pairs. Which statements are correct?"
+    type: multi
+    options:
+      - text: "The projector learns to produce inputs that the frozen LM can interpret as describing the image."
+        correct: true
+        why: "That is the purpose of the stage."
+      - text: "It relies on the frozen LM being a general reader of in-context tokens, which large LMs are and tiny ones (Lab 08) are not."
+        correct: true
+        why: "Lab 08's 1 M-parameter LM captions poorly after projector-only training."
+      - text: "The loss is computed on the image tokens."
+        why: "Image tokens have no targets; the loss is on the caption tokens."
+      - text: "After stage 1 the model follows complex instructions about images."
+        why: "Instruction following comes from stage 2 (visual instruction tuning)."
+    explain: "Stage 1 is cheap and protects the LM; stage 2 teaches the model to *use* the image to follow instructions."
+
+  - q: "PaliGemma uses a prefix-LM mask over `[image][prompt][output]`. What does this allow that LLaVA's causal mask does not?"
+    type: single
+    options:
+      - text: "Image tokens can attend to the prompt, so the image is encoded knowing the question."
+        correct: true
+        why: "With a causal mask and the image first, image positions can only see earlier image positions."
+      - text: "Output tokens can attend to future output tokens."
+        why: "The output part remains causal, as generation requires."
+      - text: "The model no longer needs a KV cache."
+        why: "Decoding still benefits from caching the prefix."
+      - text: "The image tokens are excluded from attention entirely."
+        why: "They are fully visible to every later token."
+    explain: "π0 extends this mask with a block for action tokens: actions read image and text, image and text do not read actions."
+
+  - q: "SmolVLM-256M receives a 512×512 image. With image splitting on (default) it reads 1088 image tokens; with it off, 64. In Lab 08 the 64-token version describes the scene better. Why?"
+    type: single
+    options:
+      - text: "Splitting first upsamples to a 2048-px longest edge; each of the 16 tiles shows a featureless piece of floor, so 17× more tokens carry no extra information."
+        correct: true
+        why: "Tiling helps only when the original image has detail beyond the encoder's native resolution."
+      - text: "The model cannot process more than 64 image tokens."
+        why: "It processes 1088 without error; the answer is just worse."
+      - text: "Pixel shuffle is disabled when splitting is on."
+        why: "Each tile is still pixel-shuffled to 64 tokens."
+      - text: "Splitting changes the colours of the image."
+        why: "Resizing does not change colours materially."
+    explain: "Token budgets are a design decision with consequences for latency *and* correctness."
+
+  - q: "In Lab 08, which skill does the tiny VLM learn last, and what change makes it learn faster?"
+    type: single
+    options:
+      - text: "Absolute location ('where is the red toolbox?'); giving image tokens 2-D (row + column) position embeddings."
+        correct: true
+        why: "With 1-D positions over raster order, 'column' is a periodic function of the token index, slow to learn; 2-D positions make it explicit."
+      - text: "Counting; adding more image tokens."
+        why: "Counting is learned first."
+      - text: "Colour; unfreezing the vision tower."
+        why: "Colour is learned early with the frozen tower."
+      - text: "Relations; removing the projector."
+        why: "Relations are learned before location, and the projector is required."
+    explain: "A linear probe shows the location is present in the frozen patch features; the bottleneck is how the LM can read token positions."
+
+  - q: "The tiny VLM answers 'what color is the cone?' with a colour for every scene that has no cone. What is the best explanation?"
+    type: single
+    options:
+      - text: "Its training data never contained a question whose answer is 'there is no cone', so that answer does not exist for it; the language prior supplies a plausible colour."
+        correct: true
+        why: "A model can only produce answers its training distribution contains; this is the mechanism behind much VLM hallucination."
+      - text: "The vision tower cannot see cones."
+        why: "It answers cone questions correctly when a cone is present."
+      - text: "Greedy decoding causes it; sampling would answer 'none'."
+        why: "'none' is not even in the vocabulary of answers it was trained on."
+      - text: "The KV cache is stale."
+        why: "Cached generation is verified to match full recomputation."
+    explain: "For robots: a confident, wrong 'yes, it is red' is worse than an abstention. Train with unanswerable questions and verify answers against geometry."
+
+  - q: "Which rung of the 'describe → act' ladder does SayCan occupy, and what limits it?"
+    type: single
+    options:
+      - text: "Task planning over a fixed skill library, scoring each skill by LM usefulness × learned affordance; it can only do what the library contains."
+        correct: true
+        why: "SayCan multiplies $p_{LM}(\\text{skill}\\mid\\ell)$ by a value function estimating success."
+      - text: "Direct action prediction at 10 Hz."
+        why: "That is a VLA (rung 5)."
+      - text: "Code generation against a robot API."
+        why: "That is Code as Policies (rung 3)."
+      - text: "Perception only."
+        why: "SayCan chooses skills to execute."
+    explain: "Each rung trades expressiveness for checkability; Part IV decides per robot and per decision."

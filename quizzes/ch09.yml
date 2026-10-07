@@ -1,0 +1,87 @@
+title: "Chapter 9 — Check your understanding"
+questions:
+  - q: "Why do VLA recipes co-train on web VQA data while fine-tuning on robot demonstrations?"
+    type: single
+    options:
+      - text: "To limit catastrophic forgetting of the backbone's semantic knowledge, which is the reason for using a VLM in the first place."
+        correct: true
+        why: "Narrow robot data overwrites general abilities unless they keep being exercised."
+      - text: "Because robot demonstrations contain no language."
+        why: "They contain instructions; the issue is breadth, not presence."
+      - text: "To make the action loss smaller."
+        why: "Co-training usually makes the action loss slightly *higher*; it protects other abilities."
+      - text: "Because web data improves motor precision."
+        why: "Web data carries no motor information."
+    explain: "RT-2 introduced co-fine-tuning; π0.5 extended it to heterogeneous data mixtures."
+
+  - q: "A LoRA adapter on a $4096\\times4096$ matrix with rank $r=16$ has how many trainable parameters, and what is the update at initialisation?"
+    type: single
+    options:
+      - text: "$16\\cdot(4096+4096)=131{,}072$; zero, because $B$ is initialised to zero."
+        correct: true
+        why: "$A$ is $4096\\times16$, $B$ is $16\\times4096$; $AB=0$ when $B=0$."
+      - text: "$4096^2$; zero."
+        why: "That is the full matrix, which stays frozen."
+      - text: "$16\\cdot4096$; random."
+        why: "Both factors are trained, and the product starts at zero."
+      - text: "$131{,}072$; equal to $W_0$."
+        why: "The update is added to $W_0$; it starts at zero."
+    explain: "Starting as the identity is what lets a small update adapt a large model without first destroying it."
+
+  - q: "Which statements about recording demonstrations are correct?"
+    type: multi
+    options:
+      - text: "Record the commanded actions, not only the measured robot states."
+        correct: true
+        why: "States mix in tracking error and latency; the policy must output commands."
+      - text: "Timestamp all streams on one clock and measure the operator-to-robot latency."
+        correct: true
+        why: "Misaligned observation–action pairs teach late reactions."
+      - text: "Keep failed episodes out of the BC training set but keep them in the archive."
+        correct: true
+        why: "They are useful for success detectors, analysis and RL."
+      - text: "Record at whatever rate is convenient; the policy adapts at deployment."
+        why: "Policies must run at the rate their data was recorded or resampled to."
+    explain: "A dataset is only reusable with its metadata: rates, calibration, conventions, outcomes."
+
+  - q: "A policy scores 12/20 and another 15/20 on the same 20 initial conditions. What can you conclude?"
+    type: single
+    options:
+      - text: "Very little: the 95% intervals (≈39–78% and ≈53–89%) overlap heavily; many more paired episodes are needed."
+        correct: true
+        why: "Binary outcomes with $n=20$ give intervals of about ±20 points."
+      - text: "The second policy is 25% better."
+        why: "The difference is well within noise."
+      - text: "The first policy is broken."
+        why: "60% success is not evidence of a bug."
+      - text: "They are identical."
+        why: "The data is also compatible with a real difference; it is just inconclusive."
+    explain: "Pre-register the protocol, pair the conditions, and size the evaluation for the difference you need to detect."
+
+  - q: "A depot VLA was trained with one instruction per scene. In new scenes it succeeds on 'go to the red object' far more often than on 'go to the red toolbox'. What is the most likely explanation?"
+    type: single
+    options:
+      - text: "It learned a scene→action shortcut and largely ignores the instruction; ambiguous instructions accept more targets, so heading for *some* object succeeds more often."
+        correct: true
+        why: "With one task per scene, the scene alone predicts the action in training."
+      - text: "Ambiguous instructions are easier to parse."
+        why: "Parsing is not the bottleneck; grounding the specific target is."
+      - text: "The colour words have better embeddings than the kind words."
+        why: "Both are learned from the same data."
+      - text: "The success radius is larger for ambiguous instructions."
+        why: "The radius is the same; there are just more acceptable targets."
+    explain: "Pair each scene with several instructions so that only the language predicts the action — measured in Lab 11."
+
+  - q: "Your fixed budget allows 2000 demonstrations. Which collection plan best supports generalisation to new depots?"
+    type: single
+    options:
+      - text: "Spread them over as many distinct sites, object instances, lighting conditions and task pairings as possible."
+        correct: true
+        why: "Generalisation tracks diversity of environments and objects."
+      - text: "2000 demonstrations of the hardest task in the main depot."
+        why: "Improves performance where the robot already works, not elsewhere."
+      - text: "1000 nominal demonstrations and 1000 copies of them."
+        why: "Duplicates add no information."
+      - text: "Only failures, to learn from mistakes."
+        why: "BC needs successful behaviour; failures help other components."
+    explain: "Diversity, consistency and recoveries beat volume (DROID's design; Lab 10's 50-demo result)."
