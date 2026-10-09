@@ -54,6 +54,16 @@ $$
 
 A categorical distribution can represent *any* distribution over $V$ outcomes, including multimodal ones. This is a major reason why early VLAs discretised actions into bins and predicted them like words ([Chapter 8](../08-vla/index.md)).
 
+<figure markdown="span">
+  ![Gaussian and categorical heads side by side, from last layer to inference](../../assets/figures/gaussian-vs-categorical-head.svg)
+  <figcaption markdown="span">Choosing a distribution changes three things and leaves the network body untouched. The last layer: $m$ numbers for a Gaussian, $V$ scores per action dimension for a categorical. The loss: MSE against a float, or cross-entropy against a bin index. The decode step: use the output directly, or sample a bin and map it back to a continuous action.</figcaption>
+</figure>
+
+<figure markdown="span">
+  ![Network view of a Gaussian head versus a categorical head](../../assets/figures/head-nn-view.svg)
+  <figcaption markdown="span">The same network seen as units and weights. Everything up to the last hidden layer $\mathbf{h}$ (violet) is identical. The Gaussian head has $m$ output units, each one the action value. The categorical head has $m\cdot V$ output units, a group of $V$ per action dimension; a softmax inside each group turns its logits into probabilities (darker = more probable). Dimension 1 here is bimodal, with two peaks and nothing in between, which a single Gaussian output cannot express. The categorical head has $V$ times more weights in the last layer.</figcaption>
+</figure>
+
 ## Softmax
 
 !!! definition "Softmax"
@@ -104,11 +114,21 @@ $$
 i.e. **maximum likelihood = minimising cross-entropy = minimising forward KL** to the data distribution. Forward KL is *mass-covering*: $p_\theta$ is heavily penalised wherever $p_\text{data}>0$ but $p_\theta\approx0$, so it spreads probability over all modes of the data. (Reverse KL $D_\text{KL}(p_\theta\Vert p_\text{data})$, used in variational inference and some RL objectives, is *mode-seeking*.)
 
 <figure markdown="span">
+  ![Entropy, cross-entropy and KL for three models of the same data](../../assets/figures/entropy-cross-kl.svg)
+  <figcaption markdown="span">Worked example: the next move of a robot is *left, right, up* or *down* with true probabilities $p=(0.5,0.3,0.15,0.05)$, whose entropy is $H(p)=1.14$ nats (grey bar). A model's cross-entropy $H(p,q)$ is that entropy plus a penalty, the KL divergence. A model equal to the data pays nothing extra. A close model pays 0.03. An overconfident model that puts 0.85 on *right* pays 1.00, nearly doubling the cost. The entropy part cannot be reduced by any model; training can only shrink the coloured KL part.</figcaption>
+</figure>
+
+<figure markdown="span">
   ![Forward versus reverse KL fit of a bimodal distribution](../../assets/figures/kl-forward-reverse.svg)
   <figcaption markdown="span">Fitting a single Gaussian to a bimodal distribution. Minimising the forward KL (maximum likelihood) covers both modes and puts mass between them. Minimising the reverse KL picks one mode and ignores the other.</figcaption>
 </figure>
 
 **Perplexity** $=\exp(\text{average NLL per token})$ is the standard language-model metric: a perplexity of 20 means the model is, on average, as uncertain as a uniform choice among 20 tokens.
+
+<figure markdown="span">
+  ![Per-token surprise, mean NLL and perplexity](../../assets/figures/perplexity-example.svg)
+  <figcaption markdown="span">Left: a model reads the instruction *move the arm to the red cube.* and gives the true next token a probability each time. The surprise $-\log p$ is large only for *red* (0.12), where the model was unsure. The mean surprise is 0.67 nats, so the perplexity is $e^{0.67}=1.96$: on average the model behaves as if choosing between about 2 equally likely tokens. Right: perplexity is the exponential of the mean NLL, so every extra nat multiplies the number of effective choices by $e\approx2.7$. A perplexity of 20 is 3.0 nats; a model with no information about a 100-token vocabulary has 4.6 nats and perplexity 100.</figcaption>
+</figure>
 
 ## Sampling
 
@@ -123,6 +143,13 @@ Two more tools appear later and are only stated here:
 
 - **Bayes' rule** $p(\mathbf{z}\mid\mathbf{x})=p(\mathbf{x}\mid\mathbf{z})p(\mathbf{z})/p(\mathbf{x})$ — the basis of state estimation (Kalman filters, in [Chapter 13](../13-uavs/index.md)) and of latent-variable models.
 - **Latent variables**: $p_\theta(\mathbf{y}\mid\mathbf{x})=\int p_\theta(\mathbf{y}\mid\mathbf{x},\mathbf{z})p(\mathbf{z})\,d\mathbf{z}$. Simple conditionals mixed over a hidden $\mathbf{z}$ give complex, multimodal marginals. VAEs (used by ACT), diffusion and flow models are all built this way ([Chapter 6](../06-generative/index.md)).
+
+**Bayes' rule in one line:** *posterior ∝ likelihood × prior*. The prior is what you believed before looking, the likelihood is how well each hypothesis explains the observation, and dividing by $p(\mathbf{x})$ only renormalises so the result sums to 1. A weak observation barely moves a strong prior, and a precise one dominates a vague prior.
+
+<figure markdown="span">
+  ![Bayes' rule as counting cases and as multiplying two Gaussians](../../assets/figures/bayes-rule.svg)
+  <figcaption markdown="span">Left, by counting: an object is present in 10 of 100 cases, and a detector fires on 90% of those (9) but also falsely on 20% of the other 90 (18). Of the 27 detections only 9 are real, so $p(\text{object}\mid\text{detection})=9/27=0.33$ despite the "90% accurate" detector, because the prior was low. Right, continuous: a prior over the object's position ($\sigma=0.6$ m, centred at 0) multiplied by a sensor reading ($\sigma=0.4$ m, centred at 1) gives a posterior centred at 0.69 m with $\sigma=0.33$ m, narrower than either source and pulled towards the more precise one. This one-dimensional update is the core of the Kalman filter.</figcaption>
+</figure>
 
 ## Why it matters for VLAs and robots
 

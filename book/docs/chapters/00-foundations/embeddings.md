@@ -24,7 +24,7 @@ $$
 X_{t,:} = \mathbf{e}_{i_t}E, \qquad \mathbf{e}_{i_t}\in\{0,1\}^{1\times V}.
 $$
 
-Multiplying a one-hot row vector by $E$ selects row $i_t$. So an embedding layer is mathematically an `nn.Linear(V, d, bias=False)` applied to one-hot inputs, implemented as an *indexing* operation (`E[ids]`) because multiplying by mostly-zero vectors is wasteful. Its gradient follows from the [affine-map rule](training.md#how-does-it-work): $\bar E=\sum_t \mathbf{e}_{i_t}^\top\bar X_{t,:}$, i.e. each occurrence of token $i$ adds its upstream gradient to row $i$; rows of tokens absent from the batch receive zero gradient.
+Multiplying a one-hot row vector by $E$ selects row $i_t$. So an embedding layer is mathematically an `nn.Linear(V, d, bias=False)` applied to one-hot inputs, implemented as an *indexing* operation (`E[ids]`) because multiplying by mostly-zero vectors is wasteful. Its gradient follows from the [affine-map rule](training.md#the-three-layers-of-an-mlp): $\bar E=\sum_t \mathbf{e}_{i_t}^\top\bar X_{t,:}$, i.e. each occurrence of token $i$ adds its upstream gradient to row $i$; rows of tokens absent from the batch receive zero gradient.
 
 ```python
 import torch

@@ -392,6 +392,197 @@ def backprop_graph(C):
     return fig
 
 
+def _clip(c, d, hw, hh):
+    """Point where the segment from box centre c towards d leaves the box."""
+    dx, dy = d[0] - c[0], d[1] - c[1]
+    t = min(hw / abs(dx) if dx else 1e9, hh / abs(dy) if dy else 1e9)
+    return (c[0] + dx * t, c[1] + dy * t)
+
+
+def gnode(ax, C, c, name, val, grad=None, form=None, hue="blue", hw=0.55, hh=0.45):
+    """Graph node: formula (muted), forward value (blue), gradient (orange)."""
+    box(ax, C, c[0] - hw, c[1] - hh, 2 * hw, 2 * hh, hue=hue, ls="-" if grad is not None else "--", lw=1.4)
+    top = c[1] + hh - 0.17
+    ax.text(c[0], top, form or name, ha="center", va="center", fontsize=8.5, color=C.muted)
+    ax.text(c[0], c[1] - 0.02, f"{val:g}", ha="center", va="center", fontsize=12, color=C["blue"], fontweight="bold")
+    if grad is not None:
+        ax.text(c[0], c[1] - hh + 0.17, f"$\\bar{{{name}}}={grad:g}$", ha="center", va="center", fontsize=10, color=C["orange"])
+
+
+def gedge(ax, C, a, b, tag=None, off=0.11, hw=0.55, hh=0.45, fwd=True):
+    """Forward arrow a -> b (blue) and, beside it, the backward arrow b -> a (orange) labelled `tag`."""
+    p, q = _clip(a, b, hw, hh), _clip(b, a, hw, hh)
+    L = math.hypot(q[0] - p[0], q[1] - p[1])
+    n = (-(q[1] - p[1]) / L, (q[0] - p[0]) / L)
+    sh = lambda pt, k: (pt[0] + n[0] * k, pt[1] + n[1] * k)
+    if fwd:
+        arrow(ax, C, sh(p, off), sh(q, off), color=C["blue"], lw=1.3)
+    if tag is not None:
+        arrow(ax, C, sh(q, -off), sh(p, -off), color=C["orange"], lw=1.3)
+        m = sh(((p[0] + q[0]) / 2, (p[1] + q[1]) / 2), -0.3)
+        ax.text(m[0], m[1], tag, ha="center", va="center", fontsize=9, color=C["orange"])
+
+
+@figure
+def backprop_scalar(C):
+    x, w, b, v, y = 2.0, 1.5, -1.0, 2.0, 3.0
+
+    def loss(x, w, b, v, y):
+        return (v * max(w * x + b, 0.0) - y) ** 2
+
+    p = w * x; z = p + b; h = max(z, 0.0); yh = v * h; L = loss(x, w, b, v, y)
+    g_yh = 2 * (yh - y); g_h = v * g_yh; g_z = g_h * (z > 0); g_p = g_z
+    g = dict(L=1.0, yh=g_yh, h=g_h, z=g_z, p=g_p, b=g_z, v=h * g_yh, w=x * g_p, x=w * g_p)
+    for i, k in enumerate("xwbv"):  # the numbers drawn must match finite differences
+        a = [x, w, b, v, y]; a[i] += 1e-6; hi = loss(*a); a[i] -= 2e-6
+        assert abs((hi - loss(*a)) / 2e-6 - g[k]) < 1e-5, k
+
+    fig, ax = canvas(9.0, 4.3)
+    pos = dict(x=(0.75, 3.35), w=(0.75, 1.65), p=(2.4, 2.5), b=(3.9, 0.9), z=(3.9, 2.5), h=(5.4, 2.5),
+               v=(6.9, 0.9), yh=(6.9, 2.5), y=(8.35, 0.9), L=(8.35, 2.5))
+    forms = dict(p="$p=w\\,x$", z="$z=p+b$", h="$h=\\mathrm{ReLU}(z)$", yh="$\\hat y=v\\,h$", L="$\\mathcal{L}=(\\hat y-y)^2$")
+    vals = dict(x=x, w=w, p=p, b=b, z=z, h=h, v=v, yh=yh, y=y, L=L)
+    for k, c in pos.items():
+        gnode(ax, C, c, "\\hat y" if k == "yh" else ("\\mathcal{L}" if k == "L" else k), vals[k],
+              None if k == "y" else g[k], forms.get(k), hue="violet" if k in "wbv" else "blue")
+    edges = [("x", "p", w), ("w", "p", x), ("p", "z", 1), ("b", "z", 1), ("z", "h", int(z > 0)), ("h", "yh", v),
+             ("v", "yh", h), ("yh", "L", g_yh), ("y", "L", None)]
+    for a, c, t in edges:
+        gedge(ax, C, pos[a], pos[c], None if t is None else f"\u00d7{t:g}")
+    label(ax, C, 0.1, 0.12, "blue: forward value     orange: $\\bar u=\\partial\\mathcal{L}/\\partial u$,"
+          " each arrow multiplies by a local derivative     violet: parameters", fs=9, ha="left")
+    return fig
+
+
+@figure
+def backprop_fanout(C):
+    u = 2.0
+    a, b = u * u, 3 * u
+    ga, gb = 2 * u, 3.0
+    fig, ax = canvas(6.6, 2.7)
+    pos = dict(u=(0.8, 1.3), a=(3.2, 2.0), b=(3.2, 0.6), L=(5.7, 1.3))
+    gnode(ax, C, pos["u"], "u", u, ga + gb, hw=0.5, hh=0.42)
+    gnode(ax, C, pos["a"], "a", a, 1, "$a=u^2$", hw=0.5, hh=0.42)
+    gnode(ax, C, pos["b"], "b", b, 1, "$b=3u$", hw=0.5, hh=0.42)
+    gnode(ax, C, pos["L"], "\\mathcal{L}", a + b, 1, "$\\mathcal{L}=a+b$", hw=0.5, hh=0.42)
+    kw = dict(hw=0.5, hh=0.42)
+    gedge(ax, C, pos["u"], pos["a"], f"+{ga:g}", **kw)
+    gedge(ax, C, pos["u"], pos["b"], f"+{gb:g}", **kw)
+    gedge(ax, C, pos["a"], pos["L"], "\u00d71", **kw)
+    gedge(ax, C, pos["b"], pos["L"], "\u00d71", **kw)
+    label(ax, C, 0.8, 0.0, "$u$ is used twice, so its gradient\nis the sum of both paths: $4+3$", fs=9, color=C["orange"], va="center")
+    return fig
+
+
+@figure
+def backprop_order(C):
+    d = n = 1000
+    rev, fwd = d * d + d * n, d * d * n + d * n
+    fig, ax = canvas(8.6, 3.9)
+    s = 0.85
+    shapes = [("$J_3$", "1\u00d7d", 0.2), ("$J_2$", "d\u00d7d", s), ("$J_1$", "d\u00d7n", s)]
+    xs = [0.5, 1.9, 3.3]
+    for row, (hue, title, res, resh, cost, grp) in enumerate([
+            ("orange", "reverse mode:  $(J_3 J_2)\\,J_1$", "1\u00d7d", 0.2, rev, (0.4, 2.85)),
+            ("blue", "forward mode:  $J_3\\,(J_2 J_1)$", "d\u00d7n", s, fwd, (1.8, 4.25))]):
+        yc = 2.75 - row * 1.85
+        label(ax, C, 0.15, yc + 0.78, title, fs=10.5, color=C[hue], ha="left")
+        for (nm, sh, h_), x0 in zip(shapes, xs):
+            box(ax, C, x0, yc - h_ / 2, s, h_, hue="violet", r=0.03)
+            label(ax, C, x0 + s / 2, yc + (0 if h_ > 0.5 else 0.2), nm, fs=11, color=C.ink)
+            label(ax, C, x0 + s / 2, yc - 0.6, sh, fs=8.5)
+        for x0 in (1.4, 2.8):
+            label(ax, C, x0 + 0.25, yc, "\u00d7", fs=13, color=C.ink)
+        box(ax, C, grp[0], yc - 0.52, grp[1] - grp[0], 1.04, hue=hue, fill=False, ls="--", r=0.1)
+        arrow(ax, C, (4.35, yc), (5.0, yc), color=C[hue])
+        label(ax, C, 4.7, yc + 0.22, "first", fs=8, color=C[hue])
+        box(ax, C, 5.1, yc - resh / 2, s, resh, hue=hue, r=0.03)
+        label(ax, C, 5.1 + s / 2, yc - 0.6, res, fs=8.5, color=C[hue])
+        label(ax, C, 6.2, yc + 0.18, "intermediate\nresult", fs=8.5, ha="left", va="center")
+        label(ax, C, 6.2, yc - 0.42, f"$\\approx 10^{{{round(math.log10(cost))}}}$ mult-adds", fs=10, color=C[hue], ha="left")
+    label(ax, C, 0.15, 0.0, f"for $d=n={d}$: forward mode costs ~{fwd / rev:.0f}\u00d7 more \u2014 and the gap grows with $n$ (billions of parameters)", fs=9.5, ha="left")
+    return fig
+
+
+@figure
+def backprop_layer(C):
+    fig, ax = canvas(8.2, 3.5)
+    box(ax, C, 2.8, 1.0, 2.6, 1.5, hue="blue", lw=1.6)
+    label(ax, C, 4.1, 2.12, "layer  $\\mathbf{y}=f(\\mathbf{x};\\theta)$", fs=11, color=C.ink)
+    label(ax, C, 4.1, 1.55, "keeps what its backward\nrule needs (e.g. $\\mathbf{x}$)", fs=8.5)
+    box(ax, C, 3.6, 3.0, 1.0, 0.4, "$\\theta$", "violet", fs=11)
+    # forward lane
+    arrow(ax, C, (0.7, 2.1), (2.8, 2.1), color=C["blue"], lw=1.6)
+    arrow(ax, C, (5.4, 2.1), (7.5, 2.1), color=C["blue"], lw=1.6)
+    arrow(ax, C, (3.95, 3.0), (3.95, 2.5), color=C["violet"], lw=1.3)
+    label(ax, C, 1.75, 2.35, "input $\\mathbf{x}$", fs=10, color=C["blue"])
+    label(ax, C, 6.45, 2.35, "output $\\mathbf{y}$", fs=10, color=C["blue"])
+    # backward lane
+    arrow(ax, C, (7.5, 1.4), (5.4, 1.4), color=C["orange"], lw=1.6)
+    arrow(ax, C, (2.8, 1.4), (0.7, 1.4), color=C["orange"], lw=1.6)
+    arrow(ax, C, (4.25, 1.0), (4.25, 0.45), color=C["orange"], lw=1.3)
+    label(ax, C, 6.45, 1.15, "$\\bar{\\mathbf{y}}$ arrives", fs=10, color=C["orange"])
+    label(ax, C, 1.75, 1.15, "$\\bar{\\mathbf{x}}=\\bar{\\mathbf{y}}\\,\\partial\\mathbf{y}/\\partial\\mathbf{x}$", fs=10, color=C["orange"])
+    label(ax, C, 4.25, 0.2, "$\\bar\\theta=\\bar{\\mathbf{y}}\\,\\partial\\mathbf{y}/\\partial\\theta$  (goes to the optimiser)", fs=10, color=C["orange"])
+    label(ax, C, 0.1, 3.3, "A layer only needs its own local rule \u2014\nit never sees the rest of the network.", fs=9, ha="left", va="center")
+    return fig
+
+
+@figure
+def backprop_affine(C):
+    B, di, do, s = 4, 3, 2, 0.24
+    fig, ax = canvas(8.6, 3.6)
+
+    def mat(x, ytop, r, c, hue, shape, name=None):
+        cells(ax, C, x, ytop, r, c, s, hue=hue)
+        label(ax, C, x + c * s / 2, ytop - r * s - 0.14, shape, fs=8, color=C.muted)
+        return x + c * s
+
+    def prod(x0, ytop, title, hue, parts):
+        label(ax, C, x0, ytop + 0.3, title, fs=10, color=C[hue], ha="left")
+        x = x0
+        for k, (r, c, hu, sh, sym) in enumerate(parts):
+            x = mat(x, ytop, r, c, hu, sh)
+            if sym:
+                label(ax, C, x + 0.2, ytop - 0.5 * s * max(r, 2), "\u00d7" if sym == "\u00b7" else sym, fs=13, color=C.ink)
+                x += 0.4
+
+    prod(0.2, 3.1, "forward:  $Y=XW$", "blue", [(B, di, "blue", "B\u00d7d_in", "\u00b7"), (di, do, "violet", "d_in\u00d7d_out", "="), (B, do, "blue", "B\u00d7d_out", "")])
+    prod(4.6, 3.1, "to the input:  $\\bar X=\\bar Y\\,W^{\\top}$", "orange", [(B, do, "orange", "B\u00d7d_out", "\u00b7"), (do, di, "violet", "d_out\u00d7d_in", "="), (B, di, "orange", "B\u00d7d_in", "")])
+    prod(0.2, 1.4, "to the weights:  $\\bar W=X^{\\top}\\bar Y$  (sum over the batch)", "orange", [(di, B, "blue", "d_in\u00d7B", "\u00b7"), (B, do, "orange", "B\u00d7d_out", "="), (di, do, "orange", "d_in\u00d7d_out", "")])
+    prod(4.6, 1.4, "to the bias:  $\\bar{\\mathbf{b}}=\\mathbf{1}^{\\top}\\bar Y$", "orange", [(1, B, "aqua", "1\u00d7B", "\u00b7"), (B, do, "orange", "B\u00d7d_out", "="), (1, do, "orange", "1\u00d7d_out", "")])
+    return fig
+
+
+@figure
+def backprop_memory(C):
+    L, k = 16, 4
+    plain = [(1, i) for i in range(1, L + 1)] + [(2, L - i) for i in range(1, L + 1)]
+    ck, kept = [], 0
+    for i in range(1, L + 1):  # forward: keep every k-th activation
+        kept += i % k == 0
+        ck.append((1, kept + (i % k != 0)))
+    for seg in range(L // k, 0, -1):
+        kept -= 1  # this segment's checkpoint is no longer needed after it
+        ck += [(1, kept + j) for j in range(1, k + 1)]  # recompute the segment
+        ck += [(2, kept + k - j) for j in range(1, k + 1)]  # backward through it
+    fig, ax = plt.subplots(figsize=(6.4, 2.6))
+    for steps, hue, lab in [(plain, "orange", "store everything"), (ck, "blue", f"checkpoint every {k} layers")]:
+        t, m = [0], [0]
+        for dur, mem in steps:
+            t.append(t[-1] + dur); m.append(mem)
+        ax.step(t, m, where="post", color=C[hue], label=f"{lab}: peak {max(m)}, time {t[-1]}")
+    ax.axvline(L, color=C.faint, lw=1, ls=":")
+    ax.text(L / 2, 17.5, "forward", ha="center", fontsize=8.5, color=C.muted)
+    ax.text(L + 8, 17.5, "backward", ha="center", fontsize=8.5, color=C.muted)
+    ax.set_ylim(0, 19)
+    ax.set_xlabel("compute time  (forward layer = 1, backward layer = 2)")
+    ax.set_ylabel("stored activations")
+    ax.legend(loc="upper right", bbox_to_anchor=(1, 0.88), fontsize=8)
+    ax.grid(True, axis="y")
+    return fig
+
+
 @figure
 def softmax_temperature(C):
     toks = ["station", "bay", "gate", "pallet", "drone"]
@@ -440,6 +631,225 @@ def mse_vs_categorical(C):
         b.text(xpos, p.max() * 1.04, t, ha="center", fontsize=8.5, color=C.ink)
     b.set_ylim(0, p.max() * 1.18)
     a.set_ylim(0, h.max() * 1.45)
+    return fig
+
+
+@figure
+def gaussian_vs_categorical_head(C):
+    # same grasp data as mse_vs_categorical, so the two figures agree
+    rng = np.random.default_rng(0)
+    y = np.concatenate([rng.normal(-0.6, 0.07, 120), rng.normal(0.6, 0.07, 120)])
+    p, _ = np.histogram(y, bins=np.linspace(-1.2, 1.2, 13))
+    p = p / p.sum()
+    fig, ax = canvas(8.1, 4.4)
+    cols = dict(head=1.45, out=3.05, train=4.85, inf=6.6)
+    for x, w, t in [(0.05, 1.0, "shared body"), (cols["head"], 1.25, "last layer"), (cols["out"], 1.5, "network output"),
+                    (cols["train"], 1.5, "training"), (cols["inf"], 1.45, "inference")]:
+        label(ax, C, x + w / 2, 4.1, t, fs=9.5, color=C.ink, fontweight="bold")
+    box(ax, C, 0.05, 0.6, 1.0, 2.9, "network\nbody\n\n(encoder,\ntransformer,\nMLP)\n\nidentical\nin both", "violet", fs=8.5)
+    rows = [(2.85, "orange", "Gaussian + MSE"), (1.05, "blue", "categorical + cross-entropy")]
+    for yc, hue, name in rows:
+        label(ax, C, 4.05, yc + 0.78, name, fs=8.5, color=C[hue], fontweight="bold")
+        arrow(ax, C, (1.05, 2.05), (cols["head"], yc))
+        arrow(ax, C, (cols["head"] + 1.25, yc), (cols["out"], yc))
+        arrow(ax, C, (cols["out"] + 1.5, yc), (cols["train"], yc))
+        arrow(ax, C, (cols["train"] + 1.5, yc), (cols["inf"], yc))
+    # head
+    box(ax, C, cols["head"], 2.5, 1.25, 0.7, "Linear(d, m)\nm numbers", "orange", fs=8.5, family="monospace")
+    box(ax, C, cols["head"], 0.7, 1.25, 0.7, "Linear(d, m·V)\nV scores per dim", "blue", fs=8.5, family="monospace")
+    # output
+    x0, w = cols["out"], 1.5
+    box(ax, C, x0, 2.4, w, 0.9, hue="orange")
+    ax.plot([x0 + 0.15, x0 + w - 0.15], [2.65, 2.65], color=C.muted, lw=1)
+    ax.plot([x0 + w / 2] * 2, [2.58, 2.72], color=C.muted, lw=1)
+    ax.plot([x0 + w / 2], [2.65], "o", color=C["red"], ms=7)
+    label(ax, C, x0 + w / 2, 3.0, "one number: 0.0", fs=8.5, color=C.ink)
+    label(ax, C, x0 + w / 2, 2.5, "(the lid)", fs=8, color=C["red"])
+    box(ax, C, x0, 0.6, w, 1.0, hue="blue")
+    bw = (w - 0.3) / len(p)
+    for i, v in enumerate(p):
+        ax.add_patch(Rectangle((x0 + 0.15 + i * bw, 0.72), bw * 0.8, v / p.max() * 0.5, fc=C["blue"], ec="none"))
+    label(ax, C, x0 + w / 2, 1.4, "V probabilities", fs=8.5, color=C.ink)
+    # training
+    box(ax, C, cols["train"], 2.4, 1.5, 0.9, "mse(pred, y)\ntarget y: a float", "orange", fs=8.5)
+    box(ax, C, cols["train"], 0.6, 1.5, 1.0, "cross_entropy\ntarget: bin index k\n(discretise first)", "blue", fs=8.5)
+    # inference
+    box(ax, C, cols["inf"], 2.4, 1.45, 0.9, "action = output\ndeterministic", "orange", fs=8.5)
+    box(ax, C, cols["inf"], 0.6, 1.45, 1.0, "sample k ~ softmax\naction = bin centre", "blue", fs=8.5)
+    label(ax, C, 4.05, 0.2, "only the last layer, the loss and the decode step differ; the body is shared", fs=8.5)
+    return fig
+
+
+@figure
+def head_nn_view(C):
+    fig, ax = canvas(8.1, 6.6)
+    X = dict(inp=0.7, h1=1.7, h2=2.7, out=4.9)
+
+    def col(x, n, yc, gap):
+        return x, yc + (np.arange(n)[::-1] - (n - 1) / 2) * gap
+
+    def links(a, b, hue, alpha, lw=0.7):
+        for ya in a[1]:
+            for yb in b[1]:
+                ax.plot([a[0], b[0]], [ya, yb], color=C[hue], lw=lw, alpha=alpha, zorder=1)
+
+    def nodes(c, hue, fcs=None, r=0.1):
+        for i, y in enumerate(c[1]):
+            fc = fcs[i] if fcs is not None else C.soft(hue)
+            ax.add_patch(Circle((c[0], y), r, fc=fc, ec=C[hue], lw=1.1, zorder=3))
+
+    def body(yc):
+        a, b, c = col(X["inp"], 3, yc, 0.4), col(X["h1"], 5, yc, 0.36), col(X["h2"], 5, yc, 0.36)
+        links(a, b, "violet", 0.35)
+        links(b, c, "violet", 0.35)
+        for k in (a, b, c):
+            nodes(k, "violet")
+        return c
+
+    # --- Gaussian: m output units, each one is the action itself
+    yg = 5.0
+    h = body(yg)
+    o = col(X["out"], 2, yg, 0.7)
+    links(h, o, "orange", 0.6, 0.9)
+    nodes(o, "orange", r=0.13)
+    for y, t in zip(o[1], ["$\\hat y_1$", "$\\hat y_2$"]):
+        ax.text(X["out"], y, t, ha="center", va="center", fontsize=8, color=C.ink, zorder=4)
+    label(ax, C, 5.35, yg, "$m=2$ outputs, each is the\naction value itself\n\nloss: MSE against the\nfloat target $y$", fs=8.5,
+          color=C.ink, ha="left")
+    label(ax, C, 0.1, 6.3, "Gaussian head", fs=10, color=C["orange"], fontweight="bold", ha="left")
+
+    # --- categorical: V logits per action dimension, softmax inside each group
+    yc = 1.95
+    h = body(yc)
+    probs = [np.array([0.46, 0.04, 0.0, 0.04, 0.46]), np.array([0.04, 0.2, 0.52, 0.2, 0.04])]
+    centres = [yc + 0.85, yc - 0.85]
+    label(ax, C, 0.1, 3.8, "categorical head", fs=10, color=C["blue"], fontweight="bold", ha="left")
+    for g, (p, cy) in enumerate(zip(probs, centres)):
+        o = col(X["out"], 5, cy, 0.26)
+        links(h, o, "blue", 0.35, 0.6)
+        nodes(o, "blue", [mix(C["blue"], C.surface, 0.15 + 0.85 * v / 0.52) for v in p], r=0.095)
+        for y, v in zip(o[1], p):
+            ax.text(X["out"] + 0.18, y, f"{v:.2f}", fontsize=7, va="center", color=C.muted)
+        ax.plot([5.55, 5.6, 5.6, 5.55], [o[1][0] + 0.1, o[1][0] + 0.1, o[1][-1] - 0.1, o[1][-1] - 0.1], color=C.muted, lw=1)
+        label(ax, C, 5.72, cy, f"softmax over\n$V=5$ bins of\naction dim {g + 1}", fs=8, color=C.ink, ha="left")
+    label(ax, C, 5.72, yc, "loss: cross-entropy\nagainst the bin index", fs=8.5, color=C.ink, ha="left")
+    # --- shared annotation
+    ax.plot([0.1, 8.0], [3.95, 3.95], color=C.faint, lw=1)
+    for x, t in [(X["inp"], "input"), (X["h1"], "hidden"), (X["h2"], "last hidden\nlayer $\\mathbf{h}$")]:
+        label(ax, C, x, 0.3, t, fs=8.5)
+    label(ax, C, 5.4, 0.3, "output layer: $m$ units  vs  $m\\cdot V$ units", fs=8.5, color=C.ink)
+    return fig
+
+
+@figure
+def entropy_cross_kl(C):
+    toks = ["left", "right", "up", "down"]
+    p = np.array([0.50, 0.30, 0.15, 0.05])
+    models = [("model = data", p, "green"), ("close model", np.array([0.40, 0.30, 0.20, 0.10]), "blue"),
+              ("overconfident", np.array([0.05, 0.85, 0.05, 0.05]), "orange")]
+    H = -(p * np.log(p)).sum()
+    fig, (a, b) = plt.subplots(1, 2, figsize=(7.8, 3.0), gridspec_kw=dict(wspace=0.45, width_ratios=[1, 1.15]))
+    w = 0.26
+    a.bar(np.arange(4) - w, p, w, color=C.faint, label="data $p$")
+    for k, (name, q, hue) in enumerate(models[1:]):
+        a.bar(np.arange(4) + k * w, q, w, color=C[hue], label=name)
+    a.set_xticks(range(4), toks)
+    a.set_ylabel("probability")
+    a.set_title("what the data does vs what the model says")
+    a.legend(fontsize=7.5, loc="upper left")
+    a.set_ylim(0, 1.05)
+    ys = np.arange(3)[::-1]
+    for y, (name, q, hue) in zip(ys, models):
+        ce = -(p * np.log(q)).sum()
+        b.barh(y, H, color=C.faint, height=0.55)
+        b.barh(y, ce - H, left=H, color=C[hue], height=0.55)
+        b.text(ce + 0.04, y, f"$H(p,q)$ = {ce:.2f}", va="center", fontsize=8.5)
+        if ce - H > 0.02:
+            b.text(H + (ce - H) / 2, y + 0.38, f"KL {ce - H:.2f}", ha="center", fontsize=8, color=C[hue])
+    b.text(H / 2, ys[0] + 0.38, f"$H(p)$ = {H:.2f}", ha="center", fontsize=8, color=C.muted)
+    b.set_yticks(ys, [m[0] for m in models], fontsize=8.5)
+    b.set_xlim(0, 2.1)
+    b.set_ylim(-0.5, 2.75)
+    b.set_xlabel("nats per sample")
+    b.set_title("cross-entropy = entropy + KL")
+    return fig
+
+
+@figure
+def perplexity_example(C):
+    toks = ["move", "the", "arm", "to", "the", "red", "cube", "."]
+    p = np.array([0.30, 0.85, 0.40, 0.90, 0.80, 0.12, 0.55, 0.95])
+    nll = -np.log(p)
+    m = nll.mean()
+    fig, (a, b) = plt.subplots(1, 2, figsize=(7.8, 3.0), gridspec_kw=dict(wspace=0.3, width_ratios=[1.35, 1]))
+    a.bar(range(len(p)), nll, color=[C["red"] if v > 1.5 else C["blue"] for v in nll], width=0.62)
+    for i, (v, pp) in enumerate(zip(nll, p)):
+        a.text(i, v + 0.05, f"p={pp:.2f}", ha="center", fontsize=7.5)
+    a.axhline(m, color=C["orange"], ls="--", lw=1.5)
+    a.text(-0.4, 2.45, f"dashed: mean = {m:.2f} nats\nperplexity = $e^{{{m:.2f}}}$ = {np.exp(m):.2f}", ha="left",
+           va="center", color=C["orange"], fontsize=8.5)
+    a.set_xticks(range(len(p)), toks, fontsize=8.5)
+    a.set_ylabel("surprise $-\\log p$ (nats)")
+    a.set_ylim(0, nll.max() * 1.3)
+    a.set_title("probability the model gave each true next token")
+    x = np.linspace(0, 4.8, 200)
+    b.semilogy(x, np.exp(x), color=C.muted, lw=1.5)
+    pts = [("this sentence", m, "orange", -0.1, 1.0), ("weaker LM", 3.0, "blue", -0.1, 1.0),
+           ("uniform over\n100 tokens", np.log(100), "red", -0.1, 1.0)]
+    for name, v, hue, dx, _ in pts:
+        b.plot([v], [np.exp(v)], "o", color=C[hue], ms=7)
+        if name == "this sentence":
+            b.text(v + 0.2, np.exp(v) * 0.8, f"{name}\nPPL {np.exp(v):.1f}", ha="left", va="center", fontsize=7.5, color=C[hue])
+        else:
+            b.text(v + dx, np.exp(v) * 1.25, f"{name}\nPPL {np.exp(v):.1f}", ha="right", va="bottom", fontsize=7.5, color=C[hue])
+    b.set_yticks([1, 2, 5, 10, 20, 50, 100], ["1", "2", "5", "10", "20", "50", "100"])
+    b.minorticks_off()
+    b.set_xlabel("mean NLL per token (nats)")
+    b.set_ylabel("perplexity $=e^{\\mathrm{NLL}}$")
+    b.set_xlim(0, 4.9)
+    b.set_ylim(0.9, 300)
+    b.set_title("perplexity = effective number of choices", fontsize=9)
+    print(f"perplexity example: mean NLL {m:.3f}, PPL {np.exp(m):.2f}, 'red' nll {nll[5]:.2f}")
+    return fig
+
+
+@figure
+def bayes_rule(C):
+    fig, (a, b) = plt.subplots(1, 2, figsize=(7.8, 3.1), gridspec_kw=dict(wspace=0.15, width_ratios=[1, 1.3]))
+    # (a) natural frequencies: 100 situations, 10 with an object; detector hits 90% / false-alarms 20%
+    n_obj, hit, fa = 10, 9, 18
+    for r in range(10):
+        for c in range(10):
+            present = r == 0
+            detected = (c < hit) if present else (c < 2)
+            a.scatter(c, -r - (0.5 if r else 0), s=95, color=C["orange"] if present else C.faint, zorder=2,
+                      edgecolors=C.ink if detected else "none", linewidths=1.6)
+    a.set_xlim(-0.7, 9.7)
+    a.set_ylim(-9.8, 0.8)
+    a.axis("off")
+    a.set_title("100 cases; ringed = detector fired", fontsize=9)
+    a.text(4.5, -11.2, f"{hit + fa} detections, {hit} real\n$p(\\mathrm{{object}}\\mid\\mathrm{{detection}})={hit}/{hit + fa}={hit / (hit + fa):.2f}$",
+           ha="center", va="top", fontsize=8.5, clip_on=False)
+    a.text(4.5, -10.0, "orange: object (10)   grey: no object (90)", color=C.muted, fontsize=8, ha="center", va="top")
+    # (b) Gaussian prior x likelihood -> narrower posterior (the Kalman-filter update in 1-D)
+    m0, s0, m1, s1 = 0.0, 0.6, 1.0, 0.4
+    w0, w1 = 1 / s0**2, 1 / s1**2
+    mp, sp = (w0 * m0 + w1 * m1) / (w0 + w1), (w0 + w1) ** -0.5
+    x = np.linspace(-2, 3, 400)
+    g = lambda m, s: np.exp(-0.5 * ((x - m) / s) ** 2) / (s * np.sqrt(2 * np.pi))
+    for m, s, hue, name in [(m0, s0, "blue", "prior\n(where we expected)"), (m1, s1, "orange", "likelihood\n(sensor reading)"),
+                            (mp, sp, "green", "posterior")]:
+        b.plot(x, g(m, s), color=C[hue], lw=2)
+        b.fill_between(x, g(m, s), color=C[hue], alpha=0.12 if hue != "green" else 0.25)
+    b.text(-0.55, g(m0, s0).max() * 0.5, "prior", color=C["blue"], ha="right", fontsize=8.5)
+    b.text(1.55, g(m1, s1).max() * 0.55, "likelihood", color=C["orange"], ha="left", fontsize=8.5)
+    b.text(mp, g(mp, sp).max() * 1.04, f"posterior  $\\mu={mp:.2f},\\ \\sigma={sp:.2f}$", color=C["green"], ha="center", fontsize=8.5)
+    b.set_yticks([])
+    b.spines["left"].set_visible(False)
+    b.set_xlabel("object position (m)")
+    b.set_ylim(0, g(mp, sp).max() * 1.2)
+    b.set_title("continuous: prior × likelihood, renormalised", fontsize=9)
+    print(f"bayes: post p={hit / (hit + fa):.3f}; gaussian mu={mp:.3f} sigma={sp:.3f} (prior sd {s0}, lik sd {s1})")
     return fig
 
 

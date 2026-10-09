@@ -88,19 +88,81 @@ Large models are trained with a **warm-up** (linearly increase $\eta$ from ~0 ov
 !!! definition "Backpropagation"
     **Backpropagation** is reverse-mode automatic differentiation applied to a neural network: it computes the gradient of a scalar loss with respect to *all* parameters at a cost of a small constant multiple (≈ 2×) of one forward evaluation, by applying the chain rule from the output back to the inputs on the **computational graph**.
 
-### Why reverse mode?
+Gradient descent needs $\nabla_\theta\mathcal{L}$, and a network has up to billions of parameters. Backpropagation is how we get all of those partial derivatives for roughly the price of running the network twice. It is not a new kind of mathematics — it is the chain rule from calculus, organised so that no work is repeated.
 
-For $f:\mathbb{R}^{n}\to\mathbb{R}^{m}$, **forward mode** propagates one directional derivative (a column of the Jacobian) per pass; **reverse mode** propagates one *row* (a vector–Jacobian product) per pass. A loss has $m=1$ output and $n\sim10^9$ inputs, so reverse mode gets the full gradient in one backward pass; forward mode would need $10^9$ passes. If you know adjoint methods from optimal control (the costate in Pontryagin's principle), backpropagation is exactly the discrete adjoint method.
+### The idea: local derivatives on a graph
 
-### How does it work?
+A network is a long composition of simple operations (multiply by a matrix, add a bias, apply ReLU, …). Draw each intermediate value as a node and each operation as an arrow: that is the **computational graph**. Two passes visit it:
 
-Write the network as a chain $\mathbf{x}\to\mathbf{u}_1\to\mathbf{u}_2\to\dots\to\mathcal{L}$. For each intermediate $\mathbf{u}$ define its **adjoint** (gradient) $\bar{\mathbf{u}}=\partial\mathcal{L}/\partial\mathbf{u}$, same shape as $\mathbf{u}$. If $\mathbf{v}=g(\mathbf{u})$, the chain rule gives the **vector–Jacobian product**
+1. **Forward pass.** Evaluate the graph left to right and *remember* every intermediate value.
+2. **Backward pass.** Walk the graph right to left. At every node, store its **adjoint** $\bar u=\partial\mathcal{L}/\partial u$: how much the final loss changes per unit change of $u$. Each arrow passes the adjoint backwards after multiplying it by the **local derivative** of that one operation.
+
+That is the whole algorithm: *the gradient of the loss with respect to a node = the gradient at the node after it × the local derivative of the step between them.* The local derivatives are trivial (the derivative of $a+b$ is 1, of $ab$ is the *other* factor, of ReLU is 0 or 1); the chain rule glues them together.
+
+### A worked example
+
+Take one "neuron" followed by a squared error, $\mathcal{L}=\big(v\cdot\mathrm{ReLU}(wx+b)-y\big)^2$, with $x=2,\ w=1.5,\ b=-1,\ v=2,\ y=3$.
+
+<figure markdown="span">
+  ![Worked backpropagation example on a scalar graph](../../assets/figures/backprop-scalar.svg)
+  <figcaption markdown="span">A scalar network with real numbers. Blue: values computed on the forward pass. Orange: the adjoint $\bar u$ of every node, computed on the backward pass; the label on each orange arrow is the local derivative that was multiplied in. Violet nodes are parameters — those are the gradients the optimiser uses. All numbers are checked against finite differences when the figure is generated.</figcaption>
+</figure>
+
+Reading the figure from the right:
+
+| Step | Local derivative | Adjoint |
+|---|---|---|
+| start at the loss | — | $\bar{\mathcal{L}}=1$ |
+| $\mathcal{L}=(\hat y-y)^2$ | $2(\hat y-y)=2$ | $\bar{\hat y}=1\cdot2=2$ |
+| $\hat y=v\,h$ | w.r.t. $h$: $v=2$; w.r.t. $v$: $h=2$ | $\bar h=2\cdot2=4,\quad \bar v=2\cdot2=4$ |
+| $h=\mathrm{ReLU}(z)$ | $\mathbb{1}[z>0]=1$ | $\bar z=4$ |
+| $z=p+b$ | $1$ and $1$ | $\bar p=4,\quad\bar b=4$ |
+| $p=w\,x$ | w.r.t. $w$: $x=2$; w.r.t. $x$: $w=1.5$ | $\bar w=8,\quad\bar x=6$ |
+
+Sanity check by hand: nudge $w$ from $1.5$ to $1.51$. Then $z=2.02$, $\hat y=4.04$, $\mathcal{L}=1.0816$: the loss rose by $\approx0.08=\bar w\times0.01$. ✓.
+
+!!! note "Notice"
+    - The *same* adjoint $\bar z=4$ was reused for both $\bar b$ and (through $\bar p$) $\bar w$ and $\bar x$. Computing a separate derivative for every parameter from scratch would redo the shared right-hand part each time.
+    - If $z$ had been negative, ReLU's local derivative would be 0 and *nothing* would flow to $w$, $b$, $x$: a "dead" unit receives no gradient.
+
+### When a value is used twice, gradients add
+
+If a node feeds several operations — a weight reused for every example in a batch, a skip connection, the same embedding used at many positions — the backward pass receives one contribution per use, and the adjoint is their **sum** (the multivariable chain rule).
+
+<figure markdown="span">
+  ![Fan-out: gradients from two paths are summed](../../assets/figures/backprop-fanout.svg)
+  <figcaption markdown="span">$u$ feeds two branches. Each branch sends back its own contribution ($2u=4$ and $3$); the adjoint of $u$ is the sum, $7=\mathrm{d}(u^2+3u)/\mathrm{d}u$ at $u=2$. Every shared parameter in a network is a larger version of this picture.</figcaption>
+</figure>
+
+### Why backward and not forward?
+
+For $f:\mathbb{R}^{n}\to\mathbb{R}^{m}$, the chain rule is a product of Jacobians, and matrix multiplication is associative — so the only question is the *order*. **Forward mode** multiplies from the input side and carries a full matrix; **reverse mode** multiplies from the output side and carries a single row (a vector–Jacobian product). A loss has $m=1$ output and $n\sim10^9$ inputs, so reverse mode gets the full gradient in one backward pass; forward mode would need $10^9$ passes.
+
+<figure markdown="span">
+  ![Reverse versus forward mode: order of Jacobian products](../../assets/figures/backprop-order.svg)
+  <figcaption markdown="span">The same three Jacobians multiplied in two orders. Starting from the scalar loss, the running product stays a thin $1\times d$ row vector; starting from the input it becomes a full $d\times n$ matrix. The cost ratio is about $n$.</figcaption>
+</figure>
+
+If you know adjoint methods from optimal control (the costate in Pontryagin's principle), backpropagation is exactly the discrete adjoint method.
+
+### The rule for one layer
+
+Write the network as a chain $\mathbf{x}\to\mathbf{u}_1\to\mathbf{u}_2\to\dots\to\mathcal{L}$. If $\mathbf{v}=g(\mathbf{u})$, the chain rule for the adjoints is the **vector–Jacobian product** (VJP)
 
 $$
 \bar{\mathbf{u}} = \bar{\mathbf{v}}\,\frac{\partial\mathbf{v}}{\partial\mathbf{u}} .
 $$
 
-Each operation only needs to know how to compute its own VJP; the Jacobian itself is never formed. The rules for the two operations of an MLP layer with batch input $X\in\mathbb{R}^{B\times d_\text{in}}$:
+Each layer therefore only has to know two things: how to compute its output, and how to turn the adjoint of its output into the adjoints of its input and of its own parameters. The Jacobian itself is never formed. This is what makes backpropagation *modular* — new layer types plug in without touching the rest.
+
+<figure markdown="span">
+  ![A layer as a forward/backward module](../../assets/figures/backprop-layer.svg)
+  <figcaption markdown="span">The contract of a layer. Forward (blue): $\mathbf{x}\mapsto\mathbf{y}$. Backward (orange): receives $\bar{\mathbf{y}}$, returns $\bar{\mathbf{x}}$ for the layer before it and $\bar\theta$ for the optimiser. To do so it must have saved whatever its local derivative depends on.</figcaption>
+</figure>
+
+### The three layers of an MLP
+
+For a batch $X\in\mathbb{R}^{B\times d_\text{in}}$ we need the VJP of three operations.
 
 **Affine map** $Y = XW + \mathbf{b}$, with $W\in\mathbb{R}^{d_\text{in}\times d_\text{out}}$, $Y\in\mathbb{R}^{B\times d_\text{out}}$:
 
@@ -110,18 +172,25 @@ $$
 \bar{\mathbf{b}} = \textstyle\sum_{i=1}^{B}\bar{Y}_{i,:}\ \ (1\times d_\text{out}).
 $$
 
-Check the shapes: each gradient has the shape of the thing it is the gradient of — a cheap, reliable way to remember (or debug) these formulas. Note that $\bar W$ *sums over the batch*: the gradient of a shared parameter accumulates contributions from every place it is used. The same rule gives the gradient of an embedding table ([0.6](embeddings.md)) and of attention projections shared across tokens.
+<figure markdown="span">
+  ![Shapes in the backward pass of a linear layer](../../assets/figures/backprop-affine.svg)
+  <figcaption markdown="span">The affine layer backward, with matrix shapes. Every adjoint has the shape of the tensor it belongs to, and the only way to multiply the available factors into that shape is the formula on the left of each panel. $\bar W$ and $\bar{\mathbf b}$ contract over the batch index $B$: each example contributes one term and they are added (the fan-out rule again).</figcaption>
+</figure>
+
+**Shape check.** Each gradient has the shape of the thing it is the gradient of — a cheap, reliable way to remember (or debug) these formulas. The same rule gives the gradient of an embedding table ([0.6](embeddings.md)) and of attention projections shared across tokens.
 
 **Element-wise activation** $H=\sigma(Y)$: $\bar{Y}=\bar{H}\odot\sigma'(Y)$. For ReLU, $\sigma'(Y)=\mathbb{1}[Y>0]$.
 
 **Loss** $\mathcal{L}=\frac{1}{B}\sum_i\lVert\hat{Y}_{i,:}-Y^\ast_{i,:}\rVert^2$: $\bar{\hat Y}=\frac{2}{B}(\hat Y - Y^\ast)$.
+
+### Putting it together: a two-layer MLP
 
 <figure markdown="span">
   ![Forward and backward pass on a computational graph](../../assets/figures/backprop-graph.svg)
   <figcaption markdown="span">Backpropagation on the two-layer MLP. The forward pass (blue) computes and stores every intermediate tensor. The backward pass (orange) runs the chain in reverse: each operation turns the gradient of its output into the gradient of its input, and the gradients of the shared weights come out along the way.</figcaption>
 </figure>
 
-Backpropagation for a two-layer MLP $\hat Y = \operatorname{ReLU}(XW_1+\mathbf{b}_1)W_2+\mathbf{b}_2$:
+Backpropagation for $\hat Y = \operatorname{ReLU}(XW_1+\mathbf{b}_1)W_2+\mathbf{b}_2$ — the code is the figure, line by line:
 
 ```python
 # forward (store what the backward pass needs)
@@ -155,12 +224,17 @@ print(W.grad.shape)   # torch.Size([3, 2]) -- same shape as W
 
 Two consequences you will meet constantly:
 
-1. **Activation memory.** The saved intermediates (`Z1`, `H1` above) must live until the backward pass. For a transformer, they scale with $B\times T\times d\times L$ and usually dominate training memory. *Gradient checkpointing* discards them and recomputes during backward, trading ~30% compute for memory.
-2. **Gradients accumulate.** `.grad` is added to, not overwritten; call `optimizer.zero_grad()` each step. Accumulating over several minibatches on purpose (*gradient accumulation*) simulates a larger batch.
+1. **Activation memory.** The saved intermediates (`Z1`, `H1` above) must live until the backward pass. For a transformer, they scale with $B\times T\times d\times L$ and usually dominate training memory. *Gradient checkpointing* keeps only every $k$-th activation and recomputes the rest during backward, trading ~30% compute for memory.
+2. **Gradients accumulate.** `.grad` is added to, not overwritten (the fan-out rule, across calls); call `optimizer.zero_grad()` each step. Accumulating over several minibatches on purpose (*gradient accumulation*) simulates a larger batch.
+
+<figure markdown="span">
+  ![Activation memory with and without checkpointing](../../assets/figures/backprop-memory.svg)
+  <figcaption markdown="span">Stored activations during one training step of a 16-layer network. Without checkpointing the memory grows to 16 during the forward pass and is released as the backward pass proceeds. Checkpointing every 4 layers halves the peak (and the gap widens with depth, ~$2\sqrt{L}$ vs. $L$), at the price of recomputing each segment once: 64 instead of 48 time units, i.e. +33%.</figcaption>
+</figure>
 
 ### Gradient checking
 
-The finite-difference approximation $\partial\mathcal{L}/\partial\theta_j\approx[\mathcal{L}(\theta+\epsilon\mathbf{e}_j)-\mathcal{L}(\theta-\epsilon\mathbf{e}_j)]/2\epsilon$ (error $O(\epsilon^2)$) verifies hand-written gradients. Use float64 and $\epsilon\approx10^{-6}$; a relative error below $10^{-6}$ means the gradient is right. Lab 00 does this for the code above.
+The finite-difference approximation $\partial\mathcal{L}/\partial\theta_j\approx[\mathcal{L}(\theta+\epsilon\mathbf{e}_j)-\mathcal{L}(\theta-\epsilon\mathbf{e}_j)]/2\epsilon$ (error $O(\epsilon^2)$) verifies hand-written gradients — it is what we just did by hand for $w$ in the worked example. Use float64 and $\epsilon\approx10^{-6}$; a relative error below $10^{-6}$ means the gradient is right. It costs two forward passes *per parameter*, so it is a test tool, never a training method. Lab 00 does this for the code above.
 
 ## Initialisation
 

@@ -20,7 +20,7 @@ $$
 C\approx 6ND .
 $$
 
-**Derivation.** The forward pass costs $\approx2N$ FLOPs per token ([2.6](inference.md#flops-per-token)). The backward pass computes, for every weight matrix, two products of the same size as the forward one — the gradient with respect to the input ($\bar X=\bar YW^\top$) and with respect to the weight ($\bar W=X^\top\bar Y$) ([0.3](../00-foundations/training.md#how-does-it-work)) — so $\approx4N$. Total $6N$ per token.
+**Derivation.** The forward pass costs $\approx2N$ FLOPs per token ([2.6](inference.md#flops-per-token)). The backward pass computes, for every weight matrix, two products of the same size as the forward one — the gradient with respect to the input ($\bar X=\bar YW^\top$) and with respect to the weight ($\bar W=X^\top\bar Y$) ([0.3](../00-foundations/training.md#the-three-layers-of-an-mlp)) — so $\approx4N$. Total $6N$ per token.
 
 Example: training a 7B model on 2 T tokens costs $6\cdot7\times10^9\cdot2\times10^{12}\approx8.4\times10^{22}$ FLOPs. At 40% utilisation of GPUs delivering $10^{15}$ bf16 FLOP/s each, that is $2.1\times10^8$ GPU-seconds ≈ 2,400 GPU-days. Fine-tuning OpenVLA on robot data is reported at ~21,500 A100-hours for the pretraining run; a LoRA fine-tune on a single task fits on one GPU in hours ([Chapter 9](../09-training/index.md)).
 
